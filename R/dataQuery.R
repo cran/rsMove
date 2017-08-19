@@ -5,39 +5,41 @@
 #' @param st Object of class \emph{Date} with \emph{xy} observation dates.
 #' @param img Object of class \emph{RasterLayer}, \emph{RasterStack} or \emph{RasterBrick}.
 #' @param rt Object of class \emph{Date} with \emph{img} observation dates.
-#' @param type One of \emph{exact} or \emph{nearest}.
+#' @param tb Two element vector with temporal search buffer, expressed in days.
 #' @param bs Buffer size (unit depends on the raster projection).
-#' @param rd Logical. Should the function ignore duplicated pixels? Default if FALSE.
 #' @param fun Passes an external function.
-#' @import raster grDevices rgdal
+#' @import raster rgdal
 #' @importFrom stats median
 #' @seealso \code{\link{sampleMove}} \code{\link{backSample}}
-#' @return A SpatialPointsDataDataFrame.
+#' @return A n object of class \emph{vector} or \emph{data.frame}.
 #' @details {Returns environmental variables from a raster object for a given set of x and y coordinates.
-#'          A buffer size (\emph{bs}) and a user defined function (\emph{fun}) can be specified to sample within an 
-#'          area. The defaut is to estimate a weighted mean. If acquisition times are provided (\emph{rt}) the 
-#'          raster data is treated as a time series. In this case, the function applies 
-#'          one of two sampling approaches: \emph{exact} or \emph{nearest}. If \emph{exact}, the function attempts to map the 
-#'          dates of the raster time series with the observation dates of the samples (\emph{ot}). If nearest, 
-#'          it searches for the nearest time step. If \emph{rd} is set, the function will account for duplicated 
-#'          pixels. The samples will be transposed to pixel coordinates and, for each unique pixel, median 
-#'          coordinates will be estimated for each pixel and used to build the output shapefile.}
+#'          A buffer size (\emph{bs}) and a user defined function (\emph{fun}) can be specified to sample 
+#'          within an area. The defaut is to estimate a weighted mean. If raster acquisition times are provided 
+#'          (\emph{rt}) and the date of sampling (\emph{st}). In this case, the function will treat the raster 
+#'          data as a time series and search for clear pixel in time within the contraints of a temporal buffer 
+#'          defined by \emph{tb}. \emph{tb} passes two values which represent the size of the buffer in two 
+#'          directions: before and after the target date. This allows for bacward and forward sampling.}
 #' @examples {
 #'  
-#'  require(rgdal)
 #'  require(raster)
-#'  require(sp)
 #'  
-#'  # read movement data
-#'  file <- system.file('extdata', 'konstanz_20130805-20130811.shp', package="rsMove")
-#'  moveData <- shapefile(file)
-#'  
-#'  # read remote sensing data
+#'  # read raster data
 #'  file <- list.files(system.file('extdata', '', package="rsMove"), 'tc.*tif', full.names=TRUE)
 #'  rsStk <- stack(file)
+#'  rsStk <- stack(rsStk, rsStk, rsStk) # dummy files for the example
+#'  
+#'  # read movement data
+#'  moveData <- read.csv(system.file('extdata', 'konstanz_20130805-20130811.csv', package="rsMove"))
+#'  moveData <- SpatialPointsDataFrame(moveData[1:10,1:2], moveData[1:10,], proj4string=crs(rsStk))
+#'  
+#'  # raster dates
+#'  r.date <- seq.Date(as.Date("2013-08-01"), as.Date("2013-08-09"), 1)
+#'  
+#'  # sample dates
+#'  o.date <- as.Date(moveData@data$date)
 #'  
 #'  # retrieve remote sensing data for samples
-#'  rsQuery <- dataQuery(xy=moveData,img=rsStk)
+#'  rsQuery <- dataQuery(xy=moveData, st=o.date, img=rsStk, rt=r.date, tb=c(30,30))
 #' 
 #' }
 #' 
@@ -45,7 +47,7 @@
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 
-dataQuery <- function(xy=xy, st=NULL, img=img, rt=NULL, type=NULL, bs=NULL, rd=FALSE, fun=NULL) {
+dataQuery <- function(xy=xy, st=NULL, img=img, rt=NULL, tb=NULL, bs=NULL, fun=NULL) {
   
 #-------------------------------------------------------------------------------------------------------------------------------#
 # check variables
@@ -63,7 +65,6 @@ dataQuery <- function(xy=xy, st=NULL, img=img, rt=NULL, type=NULL, bs=NULL, rd=F
   # check if raster is a ts
   if (!is.null(rt)) {
     if (class(rt)[1]!='Date') {stop('"rt" is not of a valid class')}
-    if (length(rt)!=length(xy)) {stop('lengths of "rt" and "xy" differ')}
     if (length(rt)!=nlayers(img)) {stop('lengths of "rt" and "img" differ')}
     if (is.null(st)) {stop('"st" is missing')}
     if (class(st)[1]!='Date') {stop('"st" is not of a valid class')}
@@ -75,64 +76,57 @@ dataQuery <- function(xy=xy, st=NULL, img=img, rt=NULL, type=NULL, bs=NULL, rd=F
   if (!is.null(bs)) {if (!is.numeric(bs)) {stop('"bs" assigned but not numeric')}} else {fun=NULL}
   if (!is.null(bs) & is.null(fun)) {fun <- function(x) {sum(x*x) / sum(x)}} else {
   if (!is.null(fun)) {if (!is.function(fun)) {stop('"fun" is not a valid function')}}}
-  
-  # duplicate removal
-  if (!is.logical(rd)) {stop('"rd" is not a valid logical argument')}
-  if (rd) {
-    ext <- extent(img)
-    nr <- dim(img)[1]
-    pxr <- res(img)[1]
-    sp <- (round((ext[4]-xy@coords[,2])/pxr)+1) + nr * round((xy@coords[,1]-ext[1])/pxr)
-    dr <- !duplicated(sp)
-    op <- crs(xy)
-    up <- sp[dr]
-    xr <- vector('numeric', length(up))
-    yr <- vector('numeric', length(up))
-    for (r in 1:length(up)) {
-      ind <- which(sp==up[r])
-      xr[r] <- median(xy@coords[ind,1])
-      yr[r] <- median(xy@coords[ind,2])
-    }
-    xy <- cbind(xr, yr)
-  } else {
-    op <- crs(xy)
-    xy <- xy@coords}
+  if (!is.null(tb)) {
+    if (!is.numeric(tb)) {stop('"tb" is not numeric')}
+    if (length(tb)!=2) {stop('"tb" should be a two element vector')}}
   
 #-------------------------------------------------------------------------------------------------------------------------------#
+  
+  # output projection
+  op <- crs(xy)
+  
+  # read data
+  edata <- as.data.frame(extract(img, xy@coords, buffer=bs, fun=fun, na.rm=T))
   
   # extract environmental data
   if (processTime) {
     
-    # function for exact date query
-    qf <- if (type=='exact') {
-      function(x) {
-        ind <- which(rt==st[x])
-        if (length(ind)>1) {return(extract(xy[x,], img[[ind]], buffer=bs, fun=fun, na.rm=T))}
-      }
-    }
+    # number of samples
+    ns <- nrow(xy@coords)
     
-    # function for nearest date query
-    qf <- if (type=="nearest") {
-      function(x) {
-        td <- abs(st[x]-rt[x])
-        ind <- which(td==min(td))
-        return(extract(img[[ind]], xy[x,], buffer=bs, fun=fun, na.rm=T))
-      }
-    }
+    # function to select pixels
+    if (is.null(tb)) {
+      qf <- function(i) {
+        ind <- which(!is.na(edata[i,]))
+        if (length(ind)!=0) {
+          diff <- abs(st[i]-rt[ind])
+          loc <- which(diff==min(diff))[1]
+          return(list(value=edata[i,ind[loc]], date=rt[ind[loc]]))
+        } else{return(list(value=NA, date=NA))}}
+    } else {
+      qf <- function(i) {
+        ind <- which(!is.na(edata[i,]))
+        if (length(ind)!=0) {
+          diff <- abs(st[i]-rt[ind])
+          loc <- rt[ind] >= (st[i]-tb[1]) & rt[ind] <= (st[i]+tb[2])
+          if (sum(loc)>0) {
+            loc <- which(diff==min(diff[loc]))[1]
+            return(list(value=edata[i,ind[loc]], date=rt[ind[loc]]))
+          } else {return(list(value=NA, date=NA))}}
+        else {return(list(value=NA, date=NA))}}}
     
-    # apply query function
-    ov <- unlist(sapply(1:nrow(xy), qf))
+    # retrieve values
+    edata <- lapply(1:ns, qf)
+    orv <- do.call('c', lapply(edata, function(x) {x$value}))
+    ord <- do.call('c', lapply(edata, function(x) {x$date}))
     
+    # derive shapefile
+    return(data.frame(value=orv, date=ord))
+      
   } else {
     
     # simple query
-    ov <- extract(img, xy, buffer=bs, fun=fun, na.rm=T)
-  
+    return(edata)
+    
   }
-  
-#-------------------------------------------------------------------------------------------------------------------------------#
-  
-  # return output
-  return(SpatialPointsDataFrame(xy, as.data.frame(ov), proj4string=op))
-  
 }

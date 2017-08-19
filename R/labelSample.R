@@ -22,27 +22,28 @@
 #' resolution the more independent regions are likely to be returned. The output is 
 #' a vector with ID's assigning each sample to its region. Samples filtered by 
 #' \emph{npt} or \emph{npx} will be returned as zeros.}
-#' @import raster grDevices rgdal
+#' @import raster rgdal
 #' @seealso \code{\link{sampleMove}} \code{\link{hotMove}}
 #' @examples {
 #'  
-#'  require(rgdal)
 #'  require(raster)
-#'  require(sp)
 #'  
-#'  # read example data
-#'  file <- system.file('extdata', 'konstanz_20130805-20130811.shp', package="rsMove")
-#'  moveData <- shapefile(file)
+#'  # read raster data
+#'  r <- raster(system.file('extdata', 'tcb_1.tif', package="rsMove"))
+#'  
+#'  # read movement data
+#'  moveData <- read.csv(system.file('extdata', 'konstanz_20130804.csv', package="rsMove"))
+#'  moveData <- SpatialPointsDataFrame(moveData[,1:2], moveData, proj4string=crs(r))
 #'  
 #'  # derive region labels
-#'  labels <- labelSample(xy=moveData, rad=500, npx=2, pxr=250)
+#'  labels <- labelSample(xy=moveData, rad=90, npx=2, pxr=30)
 #'  
 #' }
 #' @export
 
 #---------------------------------------------------------------------------------------------------------------------------------------------#
 
-labelSample <- function(xy=xy, rad=rad, npt=NULL, npx=NULL, pxr=pxr) {
+labelSample <- function(xy=xy, rad=rad, npt=NULL, npx=NULL, pxr=r) {
   
 #--------------------------------------------------------------------------------------------------------------------------------------------#
 # 1. check input variables
@@ -63,27 +64,23 @@ labelSample <- function(xy=xy, rad=rad, npt=NULL, npx=NULL, pxr=pxr) {
 #--------------------------------------------------------------------------------------------------------------------------------------------#
   
   # extract extent of study area
-  
   if (is.numeric(pxr)) {
     ext <- extent(xy) # reference extent
     nr <- round((ext[4]-ext[3]) / pxr)+1 # number of rows
     nc <- round((ext[2]-ext[1]) / pxr)+1 # number of columns
-  }
+    sp <- (round((ext[4]-xy@coords[,2])/pxr)+1) + nr * round((xy@coords[,1]-ext[1])/pxr) # convert coordinates to pixel positions
+    up <- unique(sp)} # unique pixel positions
   
   if (class(pxr)[1]%in%c('RasterLayer', 'RasterStack', 'RasterBrick')) {
     if (crs(xy)@projargs!=crs(pxr)@projargs) {stop('"xy" and "pxr" have different projections')}
-    ar <- res(pxr)[1] / 2 # half the resolution
-    ext <- extent(pxr) # raster extent
     nr <- dim(pxr)[1] # numer of rows
     nc <- dim(pxr)[2] # number of columns
-    ext[c(1,3)] <- ext[c(1,3)] + ar # center mininum
-    ext[c(2,4)] <- ext[c(2,4)] - ar #center maximum
-    pxr <- ar * 2 # pixel resolution
-  }
+    sp <- cellFromXY(pxr, xy@coords) # pixel positions
+    up <- unique(sp) # unique pixel positions
+    pxr <- res(pxr)[1]} # pixel resolution
 
   # derive pixel coordinates
-  sp <- (round((ext[4]-xy@coords[,2])/pxr)+1) + nr * round((xy@coords[,1]-ext[1])/pxr) # convert coordinates to pixel positions
-  up <- unique(sp) # unique pixel positions
+  
   if (length(up)==1) {stop('warning: only one pixel with data found. Processing aborted (is pxr correct?)')}
   
 #--------------------------------------------------------------------------------------------------------------------------------------------#
@@ -137,14 +134,24 @@ labelSample <- function(xy=xy, rad=rad, npt=NULL, npx=NULL, pxr=pxr) {
 #--------------------------------------------------------------------------------------------------------------------------------------------#
   
   #determine radius (in pixels)
-  rad <- round((rad/(pxr*2))+0.1)
+  rad <- round((rad/pxr)+0.1)
   
   # dilate samples
-  upd <- sapply(up, function(x) {(((((x-1) %% nr)-rad):(((x-1) %% nr)+rad))+1) + nr * ((((x-1) %/% nr)-rad):(((x-1) %/% nr)+rad))})
-  upd <- unique(upd[which(upd >= 1 & upd <= (nr*nc))])
+  regions <- matrix(0, nr, nc)
+  for (p in 1:length(up)) {
+    rp <- ((up[p]-1)%%nr) + 1
+    cp <- ((up[p]-1)%/%nr) + 1
+    if (cp > rad) {sc<-cp-rad} else {sc<-cp}
+    if (cp < (nc-rad)) {ec<-cp+rad} else {ec<-cp}
+    if (rp > rad) {sr<-rp-rad} else {sr<-rp}
+    if (rp < (nr-rad)) {er<-rp+rad} else {er<-rp}
+    regions[sr:er,sc:ec]<- 1}
+  
+  # dilated sample position
+  upd <- which(regions==1)
   
   # evaluate sample connectivity
-  regions <- matrix(0, nr, nc)
+  regions <- regions * 0
   for (r in 1:length(upd)) {
     rp <- ((upd[r]-1) %% nr)+1
     cp <- ((upd[r]-1) %/% nr)+1

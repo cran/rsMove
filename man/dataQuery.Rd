@@ -4,8 +4,8 @@
 \alias{dataQuery}
 \title{dataQuery}
 \usage{
-dataQuery(xy = xy, st = NULL, img = img, rt = NULL, type = NULL,
-  bs = NULL, rd = FALSE, fun = NULL)
+dataQuery(xy = xy, st = NULL, img = img, rt = NULL, tb = NULL,
+  bs = NULL, fun = NULL)
 }
 \arguments{
 \item{xy}{Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.}
@@ -16,48 +16,49 @@ dataQuery(xy = xy, st = NULL, img = img, rt = NULL, type = NULL,
 
 \item{rt}{Object of class \emph{Date} with \emph{img} observation dates.}
 
-\item{type}{One of \emph{exact} or \emph{nearest}.}
+\item{tb}{Two element vector with temporal search buffer, expressed in days.}
 
 \item{bs}{Buffer size (unit depends on the raster projection).}
-
-\item{rd}{Logical. Should the function ignore duplicated pixels? Default if FALSE.}
 
 \item{fun}{Passes an external function.}
 }
 \value{
-A SpatialPointsDataDataFrame.
+A n object of class \emph{vector} or \emph{data.frame}.
 }
 \description{
 Query environmental data for coordinate pairs.
 }
 \details{
 {Returns environmental variables from a raster object for a given set of x and y coordinates.
-         A buffer size (\emph{bs}) and a user defined function (\emph{fun}) can be specified to sample within an 
-         area. The defaut is to estimate a weighted mean. If acquisition times are provided (\emph{rt}) the 
-         raster data is treated as a time series. In this case, the function applies 
-         one of two sampling approaches: \emph{exact} or \emph{nearest}. If \emph{exact}, the function attempts to map the 
-         dates of the raster time series with the observation dates of the samples (\emph{ot}). If nearest, 
-         it searches for the nearest time step. If \emph{rd} is set, the function will account for duplicated 
-         pixels. The samples will be transposed to pixel coordinates and, for each unique pixel, median 
-         coordinates will be estimated for each pixel and used to build the output shapefile.}
+         A buffer size (\emph{bs}) and a user defined function (\emph{fun}) can be specified to sample 
+         within an area. The defaut is to estimate a weighted mean. If raster acquisition times are provided 
+         (\emph{rt}) and the date of sampling (\emph{st}). In this case, the function will treat the raster 
+         data as a time series and search for clear pixel in time within the contraints of a temporal buffer 
+         defined by \emph{tb}. \emph{tb} passes two values which represent the size of the buffer in two 
+         directions: before and after the target date. This allows for bacward and forward sampling.}
 }
 \examples{
 {
  
- require(rgdal)
  require(raster)
- require(sp)
  
- # read movement data
- file <- system.file('extdata', 'konstanz_20130805-20130811.shp', package="rsMove")
- moveData <- shapefile(file)
- 
- # read remote sensing data
+ # read raster data
  file <- list.files(system.file('extdata', '', package="rsMove"), 'tc.*tif', full.names=TRUE)
  rsStk <- stack(file)
+ rsStk <- stack(rsStk, rsStk, rsStk) # dummy files for the example
+ 
+ # read movement data
+ moveData <- read.csv(system.file('extdata', 'konstanz_20130805-20130811.csv', package="rsMove"))
+ moveData <- SpatialPointsDataFrame(moveData[1:10,1:2], moveData[1:10,], proj4string=crs(rsStk))
+ 
+ # raster dates
+ r.date <- seq.Date(as.Date("2013-08-01"), as.Date("2013-08-09"), 1)
+ 
+ # sample dates
+ o.date <- as.Date(moveData@data$date)
  
  # retrieve remote sensing data for samples
- rsQuery <- dataQuery(xy=moveData,img=rsStk)
+ rsQuery <- dataQuery(xy=moveData, st=o.date, img=rsStk, rt=r.date, tb=c(30,30))
 
 }
 

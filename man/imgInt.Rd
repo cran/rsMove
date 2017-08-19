@@ -4,7 +4,8 @@
 \alias{imgInt}
 \title{imgInt}
 \usage{
-imgInt(img = img, rd = rd, td = td, bs = NULL, xy = NULL)
+imgInt(img = NULL, rd = rd, td = td, bs = NULL, xy = NULL,
+  edata = NULL)
 }
 \arguments{
 \item{img}{Object of class \emph{RasterStack} or \emph{RasterBrick}.}
@@ -13,9 +14,11 @@ imgInt(img = img, rd = rd, td = td, bs = NULL, xy = NULL)
 
 \item{td}{Target dates. Object of class \emph{Date}.}
 
-\item{bs}{Temporal buffer size (in days).}
+\item{bs}{wo element vector with temporal search buffer (expressed in days).}
 
 \item{xy}{Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.}
+
+\item{edata}{Object of class \emph{data frame} or \emph{matrix} with remote sensing data.}
 }
 \value{
 A \emph{RasterBrick} or a \emph{data frame}.
@@ -24,39 +27,37 @@ A \emph{RasterBrick} or a \emph{data frame}.
 Temporal linear interpolation of raster data.
 }
 \details{
-{Performs a pixel-wise linear interpolation over a raster 
-for a given set of dates (\emph{td}). A teporal buffer (\emph{bs}) is required 
-to limit the search for reference data points (\emph{rd}). If \emph{xy} is 
-provided the function only considers the pixels that overlap with 
-the these sample points. Otherwise, a RasterBrick is provided.}
+{Performs a pixel-wise linear interpolation over a raster for a given set of dates (\emph{td}). 
+A teporal buffer (\emph{bs}) is required to limit the search for reference data points (\emph{rd}). \emph{bs} 
+is defined by a two element vector which limits the search of images in the past and future. If \emph{xy} is 
+provided the function only considers the pixels that overlap with the these sample points. Otherwise, a RasterBrick 
+is provided. However, if \emph{edata} is provided, \emph{xy} and \emph{img} are ignored. and a data frame is provided.}
 }
 \examples{
 {
  
- require(rgdal)
  require(raster)
- require(sp)
  
- # read movement data
- file <- system.file('extdata', 'konstanz_20130805-20130811.shp', package="rsMove")
- moveData <- shapefile(file)
- 
- # read raster data
+ #'  # read raster data
  file <- list.files(system.file('extdata', '', package="rsMove"), 'tc.*tif', full.names=TRUE)
  rsStk <- stack(file)
  rsStk <- stack(rsStk, rsStk, rsStk) # dummy files for the example
+ 
+ # read movement data
+ moveData <- read.csv(system.file('extdata', 'konstanz_20130805-20130811.csv', package="rsMove"))
+ moveData <- SpatialPointsDataFrame(moveData[1:10,1:2], moveData[1:10,], proj4string=crs(rsStk))
  
  # raster dates
  rd = seq.Date(as.Date("2012-01-01"), as.Date("2012-12-31"), 45)
  
  # target dates
- td = seq.Date(as.Date("2012-04-01"), as.Date("2012-08-31"), 45)
+ td = as.Date("2012-04-01")
  
  # interpolate raster data to target dates
- i.img <- imgInt(img=rsStk, rd=rd, td=td, bs=60, xy=moveData)
+ i.img <- imgInt(img=rsStk, rd=rd, td=td, bs=c(60,60), xy=moveData)
  
 }
 }
 \seealso{
-@seealso \code{\link{dataQuery}} \code{\link{timeDirSample}} \code{\link{spaceDirSample}}
+@seealso \code{\link{dataQuery}} \code{\link{timeDir}} \code{\link{spaceDir}} \code{\link{moveSeg}}
 }

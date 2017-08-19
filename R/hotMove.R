@@ -5,7 +5,7 @@
 #' @param pxr Grid resolution. Unit depends on \emph{xy} projection.
 #' @param shp Logical. Should the function provide polygons? Default is FALSE.
 #' @return A list object.
-#' @import sp raster grDevices rgdal
+#' @import sp raster rgdal grDevices
 #' @details {The function builds a matrix for a given resolution and a 
 #' spatial extent derived from a set of samples (\emph{xy}). First, these 
 #' samples are converted into unique pixel coordinates. Then, the 
@@ -17,13 +17,12 @@
 #' @seealso \code{\link{sampleMove}} \code{\link{hotMoveStats}}
 #' @examples {
 #' 
-#' require(rgdal)
 #' require(raster)
-#' require(sp)
 #' 
 #' # reference data
-#' file <- system.file('extdata', 'latLon_example.shp', package="rsMove")
-#' moveData <- shapefile(file)
+#' sprj <- crs("+proj=longlat +ellps=WGS84 +no_defs")
+#' moveData <- read.csv(system.file('extdata', 'latlon_example.csv', package="rsMove"))
+#' moveData <- SpatialPointsDataFrame(moveData[,2:3], moveData, proj4string=sprj)
 #' 
 #' # extract regions
 #' hm <- hotMove(xy=moveData, pxr=0.1, shp=TRUE)
@@ -32,7 +31,7 @@
 #' plot(hm$polygons, col=hm$indices)
 #' 
 #' # add new information to original shapefile
-#' moveData@data <- cbind(moveData@data, hm$indices)
+#' moveData@data$indices <- hm$indices
 #' 
 #' }
 #' @export

@@ -4,19 +4,23 @@
 \alias{moveSeg}
 \title{moveSeg}
 \usage{
-moveSeg(xy = xy, img = img, type = "cont", threshold = 0.1,
-  fun = NULL)
+moveSeg(xy = xy, edata = edata, type = "cont", ot = NULL,
+  b.size = NULL, threshold = NULL, s.fun = NULL)
 }
 \arguments{
 \item{xy}{Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.}
 
-\item{img}{Object of class \emph{RasterLayer}, \emph{RasterStack} or \emph{RasterBrick}.}
+\item{edata}{Object of class \emph{RasterLayer} or \emph{data.frame}.}
 
 \item{type}{Raster data type. One of \emph{cont} (continues) or \emph{cat} (for categorical).}
 
-\item{threshold}{Percent change threshold.}
+\item{ot}{Object of class \emph{Date}, \emph{POSIXlt} or \emph{POSIXct} with \emph{xy} observation dates.}
 
-\item{fun}{Summary function.}
+\item{b.size}{Buffer size expressed in the map units.}
+
+\item{threshold}{Change threshold.}
+
+\item{s.fun}{Output summary function. Default is mean.}
 }
 \value{
 A \emph{list}.
@@ -25,42 +29,48 @@ A \emph{list}.
 Remote sensing based point segmentation
 }
 \details{
-{Segmentation of a point shapefile based on the spatial variability 
-of a raster dataset. When the \emph{method} is set to \emph{'cont'}, the raster 
-data is assumed to be continuous. Then, the function determines the percentual 
-change between each pair of two consecutive coordinate pairs. If this change is 
-above a predifined \emph{threshold}, a new pointer is added and the previous 
-sequence of samples is labeled as a unique segment. If \emph{method} is set as 
-\emph{'cat'}, the function assumes the raster data is categorical ignoring the 
-\emph{theshold} keyword. In this case, a new segment is identified if the any 
-change is observed between two consecutife points. The output consists of a list 
-containing a \emph{SpatialPointsDataFrame} (\emph{$points}) reporting on the segment 
-ID (\emph{sid}) associated to each sample and a data frame (\emph{$report}) with the 
-amount of points in each region and the value returned by \emph{fun}. If \emph{fun} 
-is set by the user, the provided function will be used to summarize the raster values 
-at each segment. Also, if \emph{img} is a \emph{RasterStack} or a \emph{RasterBrick}, 
-the \emph{fun} is used to reduce the multi-layered object to a single layer. By default, 
-the maximum value is used. Like for \emph{threshold}, \emph{fun} is ignored if 
-\emph{method} is \emph{cat}.}
+{Segmentation of a point shapefile based on the spatial variability
+of a raster dataset. When the \emph{method} is set to \emph{'cont'}, the raster
+data is assumed to be continuous. Then, the function determines the percentual
+change between each pair of two consecutive coordinate pairs. If this change is
+above a predifined \emph{threshold}, a new pointer is added and the previous
+sequence of samples is labeled as a unique segment. If \emph{method} is set as
+\emph{'cat'}, the function assumes the raster data is categorical ignoring the
+\emph{theshold} and \emph{s.fun} keywords. In this case, a new segment is identified
+if the any change is observed between two consecutife points. The output consists of
+a list containing a \emph{SpatialPointsDataFrame} (\emph{$points}) reporting on the
+segment ID (\emph{sid}) associated to each sample and a data frame (\emph{$report})
+with the amount of points in each region and the value returned by \emph{s.fun}. If
+\emph{ot} is provided, the function also provides the elapsed time within each segment.
+If \emph{fun} is set by the user, the provided function will be used to summarize the
+raster values at each segment. Also, if \emph{edata} is a \emph{RasterStack} or a
+\emph{RasterBrick}, \emph{r.fun} is used to reduce the multi-layered object to a single
+layer. he user can either use a Principal Component Analysis (PCA) analysis by setting
+\emph{r.fun} to \emph{pca} or provide a function. If \emph{pca} is selected, the first
+Principal Conponent (PC) \emph{threshold} will be set automatically to the standard
+deviation of the first PC. This is the default. If \emph{method} is \emph{cat} the
+function will assume the data is categorical and wil define segments whenever a change occurres.}
 }
 \examples{
 {
- 
- require(rgdal)
+
  require(raster)
- require(sp)
- 
- # read movement data
- moveData <- shapefile(system.file('extdata', 'konstanz_20130804.shp', package="rsMove"))
- 
+
  # read raster data
  r <- raster(system.file('extdata', 'tcb_1.tif', package="rsMove"))
- 
+
+ # read movement data
+ moveData <- read.csv(system.file('extdata', 'konstanz_20130804.csv', package="rsMove"))
+ moveData <- SpatialPointsDataFrame(moveData[,1:2], moveData, proj4string=crs(r))
+
+ # observation time
+ o.time <- strptime(paste0(moveData@data$date, ' ', moveData@data$time), format="\%Y/\%m/\%d \%H:\%M:\%S")
+
  # perform directional sampling
- seg <- moveSeg(xy=moveData, img=r, type="cont", threshold=0.1)
- 
+ seg <- moveSeg(xy=moveData, ot=o.time, edata=r, type="cont", threshold=0.1)
+
 }
 }
 \seealso{
-\code{\link{timeDirSample}} \code{\link{dataQuery}}
+\code{\link{dataQuery}} \code{\link{imgInt}}
 }

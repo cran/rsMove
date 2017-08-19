@@ -24,30 +24,28 @@ Convert spatial polygons into point samples.
 \details{
 {Determines coordinates of pixels within a given extent. If \emph{re} is missing the
            target extent corresponds to the extent of the polygon layer. In this case, \emph{pr}
-           is required. If \emph{re} is an \emph{Extent} object or \emph{re} is missing \emph{rp} is required. 
-           \emph{mpc} can be used to filter pixels with low purity, i.e. pixels where the 
-           percentage of area cover by a polygon is below the defined threshold. 
-           The output provides the coordinates (\emph{x} and \emph{y}) the 
+           is required. If \emph{re} is an \emph{Extent} object or \emph{re} is missing \emph{rp} is required.
+           \emph{mpc} can be used to filter pixels with low purity, i.e. pixels where the
+           percentage of area cover by a polygon is below the defined threshold.
+           The output provides the coordinates (\emph{x} and \emph{y}) the
            pixel percent cover (\emph{cover}) for each selected pixel.}
 }
 \examples{
 {
- 
- require(rgdal)
+
  require(raster)
- require(sp)
- 
+
  # load example probability image
  file <- system.file('extdata', 'konstanz_probabilities.tif', package="rsMove")
  img <- raster(file)
- 
+
  # load area of interest
  file <- system.file('extdata', 'konstanz_roi.shp', package="rsMove")
  roi <- shapefile(file)
- 
+
  # segment probabilities
  samples <- poly2sample(pol=roi, re=img)
- 
+
 }
 }
 \seealso{

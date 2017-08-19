@@ -4,7 +4,7 @@
 #' @param prob Object of class \emph{RasterLayer}.
 #' @param pt Difference threshold. Default is 0.05.
 #' @param mp Minimum value. Default is 0.5.
-#' @import raster grDevices
+#' @import raster rgdal
 #' @importFrom stats sd
 #' @return A list object.
 #' @details {The function segments an input layer using a connected 
@@ -21,9 +21,7 @@
 #' @seealso \code{\link{moveModel}} \code{\link{modelApply}}
 #' @examples {
 #'  
-#'  require(rgdal)
 #'  require(raster)
-#'  require(sp)
 #'  
 #'  # load example probability image
 #'  file <- system.file('extdata', 'konstanz_probabilities.tif', package="rsMove")
