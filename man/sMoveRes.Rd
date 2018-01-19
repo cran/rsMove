@@ -4,26 +4,29 @@
 \alias{sMoveRes}
 \title{sMoveRes}
 \usage{
-sMoveRes(xy = xy, pxr = pxr)
+sMoveRes(xy = xy, pixel.res = pixel.res)
 }
 \arguments{
 \item{xy}{Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.}
 
-\item{pxr}{vector of target resolutions.}
+\item{pixel.res}{vector of spatial resolutions (unit depends on spatial projection).}
 }
 \value{
 A \emph{list}.
 }
 \description{
-Evaluates how a change in raster resolution impacst the availability of data points.
+{Tool to support the selection of an adequate satellite spatial resolution. Evaluates how the change
+in spatial resolution changes the amount of samples and sample regions based on a set of coordinate pairs.}
 }
 \details{
-{Given a vector of pixel resolutions (\emph{pxr}), the function determines
-the number of unique pixels and unique pixel groups. Additionaly, for each pixel,
-the function returns the corresponding pixel indices per resolution showing which
-samples would be grouped. The function returns a data frame (\emph{$stats}) and a
-plot (\emph{$plot}) with the statistics per resolution as well as a data frame with
-the pixel indices per resolution (\emph{$indices}).}
+{Given a vector of pixel resolutions (\emph{pixel.res}), the function determines the number of unique pixels
+and unique pixel regions after their temporal aggregation. For each spatial resolution, the function starts by converting
+\emph{xy} to unique pixel coordinates and labels them based on their spatial aggregation. Then, the function counts the number
+of samples and sample regions. The output of the function consists of:
+\itemize{
+ \item{\emph{stats} - Summary statistics reporting on the number of unique samples and sample regions per spatial resolution.}
+ \item{\emph{plot} - Plot representing the change in number of samples and sample regions per spatial resolution.}
+ \item{\emph{indices} - Indices for each sample in \emph{xy} based on their spatial aggregation within each spatial resolution.}}}
 }
 \examples{
 {
@@ -31,11 +34,10 @@ the pixel indices per resolution (\emph{$indices}).}
  require(raster)
 
  # read movement data
- moveData <- read.csv(system.file('extdata', 'konstanz_20130804.csv', package="rsMove"))
- moveData <- SpatialPointsDataFrame(moveData[,1:2], moveData)
+ data(shortMove)
 
  # test function for 5, 10 20 and 30 m
- a.res <- sMoveRes(xy=moveData, pxr=c(5, 10, 20, 30))
+ a.res <- sMoveRes(xy=shortMove, pixel.res=c(5, 10, 20, 30))
 
 }
 }

@@ -1,105 +1,118 @@
 #' @title imgInt
 #'
-#' @description Temporal linear interpolation of raster data.
-#' @param img Object of class \emph{RasterStack} or \emph{RasterBrick}.
-#' @param td Target dates. Object of class \emph{Date}.
-#' @param rd Raster dates. Object of class \emph{Date}.
-#' @param bs wo element vector with temporal search buffer (expressed in days).
+#' @description {Temporal linear interpolation of environmental data using
+#' a \emph{raster}, \emph{SpatialPointsDataFrames} or \emph{data frames}.}
+#' @param env.data Object of class \emph{RasterStack}, \emph{RasterBrick} or \emph{data.frame}.
+#' @param target.dates Object of class \emph{Date} with target dates.
+#' @param env.dates Object of class \emph{Date} with dates of \emph{env.data}.
+#' @param time.buffer A two-element vector with temporal search buffer (expressed in days).
 #' @param xy Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.
-#' @param edata Object of class \emph{data frame} or \emph{matrix} with remote sensing data.
-#' @import raster sp rgdal
+#' @importFrom raster crs nlayers brick
 #' @importFrom stats lm
-#' @seealso @seealso \code{\link{dataQuery}} \code{\link{timeDir}} \code{\link{spaceDir}} \code{\link{moveSeg}}
-#' @return A \emph{RasterBrick} or a \emph{data frame}.
-#' @details {Performs a pixel-wise linear interpolation over a raster for a given set of dates (\emph{td}). 
-#' A teporal buffer (\emph{bs}) is required to limit the search for reference data points (\emph{rd}). \emph{bs} 
-#' is defined by a two element vector which limits the search of images in the past and future. If \emph{xy} is 
-#' provided the function only considers the pixels that overlap with the these sample points. Otherwise, a RasterBrick 
-#' is provided. However, if \emph{edata} is provided, \emph{xy} and \emph{img} are ignored. and a data frame is provided.}
+#' @seealso \code{\link{dataQuery}} \code{\link{timeDir}} \code{\link{spaceDir}} \code{\link{moveSeg}}
+#' @return A \emph{RasterBrick} or a \emph{data frame}. If a \emph{RasterBrick}, each layer represents a date. If a \emph{data.frame}, columns represent dates and rows represent samples.
+#' @details {Performs a pixel-wise linear interpolation over a raster for a given set of dates (\emph{target.dates}).
+#' A temporal buffer (\emph{time.buffer}) is required to limit the search for reference data points (\emph{time.buffer}).
+#' This is defined by a two element vector which limits the search in the past and future. If \emph{xy} is provided and
+#' \emph{env.data} is a \emph{raster} object the function only considers the pixels that overlap with the shapefile.
+#' Otherwise, all pixels are considered providing a \emph{RasterBrick}. However, if \emph{env.data} is a \emph{data.frame},
+#' \emph{xy} is ignored.}
 #' @examples {
-#'  
+#'
 #'  require(raster)
-#'  
+#'
 #'  #'  # read raster data
-#'  file <- list.files(system.file('extdata', '', package="rsMove"), 'tc.*tif', full.names=TRUE)
-#'  rsStk <- stack(file)
-#'  rsStk <- stack(rsStk, rsStk, rsStk) # dummy files for the example
-#'  
+#'  file <- list.files(system.file('extdata', '', package="rsMove"), 'ndvi.tif', full.names=TRUE)
+#'  r.stk <- stack(file)
+#'  r.stk <- stack(r.stk, r.stk, r.stk) # dummy files for the example
+#'
 #'  # read movement data
-#'  moveData <- read.csv(system.file('extdata', 'konstanz_20130805-20130811.csv', package="rsMove"))
-#'  moveData <- SpatialPointsDataFrame(moveData[1:10,1:2], moveData[1:10,], proj4string=crs(rsStk))
-#'  
+#'  data(shortMove)
+#'
 #'  # raster dates
-#'  rd = seq.Date(as.Date("2012-01-01"), as.Date("2012-12-31"), 45)
-#'  
+#'  file.name <- names(r.stk)
+#'  env.dates <- as.Date(paste0(substr(file.name, 2, 5), '-',
+#'  substr(file.name, 7, 8), '-', substr(file.name, 10, 11)))
+#'
 #'  # target dates
-#'  td = as.Date("2012-04-01")
-#'  
+#'  target.dates = as.Date("2012-04-01")
+#'
 #'  # interpolate raster data to target dates
-#'  i.img <- imgInt(img=rsStk, rd=rd, td=td, bs=c(60,60), xy=moveData)
-#'  
+#'  i.env.data <- imgInt(env.data=r.stk, env.dates=env.dates,
+#'  target.dates=target.dates, time.buffer=c(60,60), xy=shortMove)
+#'
 #' }
 #' @export
 
-#-------------------------------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------------------------------------------------------------#
 
-imgInt <- function(img=NULL, rd=rd, td=td, bs=NULL, xy=NULL, edata=NULL) {
-  
-#-------------------------------------------------------------------------------------------------#
-# 1. check input variables  
-#-------------------------------------------------------------------------------------------------#
-  
-  # check variables (if edata is provided)
-  if(class(td)!='Date') {stop('"td" is not a "Date" object')}
-  if(class(rd)!='Date') {stop('"rd" is not a "Date" object')}
-  if (!is.null(edata)) {
-    if (class(edata)[1]!='data.frame') {stop('"edata" is neither a matrix or a data frame')}
-    if (ncol(edata)!=length(rd)) {stop('mismatch in "edata" and "rd" dimensions')}
-    xy <- NULL
-    img <- NULL
-    bs <- NULL
-  } else {
-    if (is.null(img)) {stop('"img" is missing')}
-    if (!class(img)[1]%in%c('RasterStack', 'RasterBrick')) {stop('"img" is not of a valid class')}
+imgInt <- function(env.data=env.data, env.dates=env.dates, target.dates=target.dates, time.buffer=time.buffer, xy=NULL) {
+
+#-----------------------------------------------------------------------------------------------------------------------------------#
+# 1. check input variables
+#-----------------------------------------------------------------------------------------------------------------------------------#
+
+  # check temporal variables
+  if(class(target.dates)!='Date') {stop('"target.dates" is not a "Date" object')}
+  if(class(env.dates)!='Date') {stop('"env.dates" is not a "Date" object')}
+  if (is.null(time.buffer)) {stop('"time.buffer" is missing')}
+  if (!is.numeric(time.buffer)) {stop('"time.buffer" is not numeric')}
+
+  # check environmnetal information
+  if (!class(env.data)[1]%in%c('RasterStack', 'RasterBrick', 'data.frame')) {stop('"env.data" is not of a valid class')}
+  if (class(env.data)[1]%in%c('RasterStack', 'RasterBrick')) {
     if (!is.null(xy)) {
-      if (!class(xy)[1]%in%c('SpatialPoints', 'SpatialPointsDataFrame')) {
-        stop('"shp is nor a valid point shapefile object')}
-      if (crs(xy)@projargs!=crs(img)@projargs) {
-        stop('"xy" and "img" have different projections')}}
-    if (nlayers(img)!=length(rd)) {stop('length of "img" and "rd" do not match')}
-    if (!is.null(bs)) {if (!is.numeric(bs)) {stop('"bs" is not numeric')}}}
-  
-#-------------------------------------------------------------------------------------------------#
-# 2. interpolate values
-#-------------------------------------------------------------------------------------------------#
-  
-  # interpolation function
+      processRaster=TRUE
+      if (!class(xy)[1]%in%c('SpatialPoints', 'SpatialPointsDataFrame')) {stop('"shp is nor a valid point shapefile object')}
+      if (crs(xy)@projargs!=crs(env.data)@projargs) {stop('"xy" and "env.data" have different projections')}
+      if (nlayers(env.data)!=length(env.dates)) {stop('length of "env.data" and "env.dates" do not match')}}}
+  if (is.data.frame(env.data)) {
+    if (ncol(env.data)!=length(env.dates)) {stop('mismatch in "env.data" and "env.dates" dimensions')}
+    processRaster=FALSE}
+
+#-----------------------------------------------------------------------------------------------------------------------------------#
+# 2. build interpolation function
+#-----------------------------------------------------------------------------------------------------------------------------------#
+
   otd <- ''
   int <- function(x) {
-    di <- which(rd==otd & !is.na(x))
+    di <- which(env.dates==otd & !is.na(x))
     if (length(di)>0) {return(mean(x[di]))} else {
-      bi <- rev(which(!is.na(x) & rd < otd & rd >= (otd-bs[1])))
-      ai <- which(!is.na(x) & rd > otd & rd <= (otd+bs[2]))
+      bi <- rev(which(!is.na(x) & env.dates < otd & env.dates >= (otd-time.buffer[1])))
+      ai <- which(!is.na(x) & env.dates > otd & env.dates <= (otd+time.buffer[2]))
       if (length(bi)>=1 & length(ai)>=1) {
-        lc <- lm(c(x[bi[1]],x[ai[1]])~as.numeric(c(rd[bi[1]],rd[ai[1]])))
+        lc <- lm(c(x[bi[1]],x[ai[1]])~as.numeric(c(env.dates[bi[1]],env.dates[ai[1]])))
         return(as.numeric(otd)*lc$coefficients[2]+lc$coefficients[1])
       } else {return(NA)}}}
-    
-  # apply function
-  if (is.null(xy) & !is.null(img)) {
-    out<-brick(img[[1]], nl=length(td))
-    for (r in 1:length(td)) {
-      otd <- td[r]
-      out[[r]] <- calc(img, int)}}
-  if (!is.null(xy)) {
-    if (is.null(edata)) {edata <- extract(img, xy)}
-    out <- matrix(0, length(xy), length(td))
-    colnames(out) <- as.character(td)
-    for (r in 1:length(td)) {
-      otd <- td[r]
-      out[,r] <- apply(edata, 1, int)}}
+
+#-----------------------------------------------------------------------------------------------------------------------------------#
+# 3. read environmental data (if required)
+#-----------------------------------------------------------------------------------------------------------------------------------#
+
+  if (!is.null(xy) & processRaster) {
+    env.data <- extract(env.data, xy)
+    processRaster=FALSE}
+
+#-----------------------------------------------------------------------------------------------------------------------------------#
+# 4. interpolate
+#-----------------------------------------------------------------------------------------------------------------------------------#
+
+  # apply function (if raster)
+  if (processRaster) {
+    out <- brick(env.data[[1]], nl=length(target.dates))
+    for (r in 1:length(target.dates)) {
+      otd <- target.dates[r]
+      out[[r]] <- calc(env.data, int)}}
+
+  # apply function (if data frame)
+  if (!processRaster) {
+    out <- matrix(0, nrow(env.data), length(target.dates))
+    colnames(out) <- as.character(target.dates)
+    for (r in 1:length(target.dates)) {
+      otd <- target.dates[r]
+      out[,r] <- apply(env.data, 1, int)}}
 
   # provide output
   return(out)
-  
+
 }

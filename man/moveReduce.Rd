@@ -4,47 +4,54 @@
 \alias{moveReduce}
 \title{moveReduce}
 \usage{
-moveReduce(xy = xy, ot = ot, img = img)
+moveReduce(xy = xy, obs.time = obs.time, img = img)
 }
 \arguments{
 \item{xy}{Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.}
 
-\item{ot}{Object of class \emph{Date}, \emph{POSIXlt} or \emph{POSIXct} with \emph{xy} observation dates.}
+\item{obs.time}{Object of class \emph{Date}, \emph{POSIXlt} or \emph{POSIXct} with \emph{xy} observation dates.}
 
 \item{img}{Object of class \emph{RasterLayer}, \emph{RasterStack} or \emph{RasterBrick}.}
 }
 \value{
-A \emph{list}.
+A \emph{list} object.
 }
 \description{
-Remote sensing based point segmentation.
+Pixel based summary of movement data that preserves periodic movements.
 }
 \details{
-{SReduces a set of input samples (\emph{xy}) based on their assignment to unique pixels 
-within a reference raster (\emph{img}). The function looks at consecutive points ordered by time 
-(\emph{ot}) and aggregates samples if they remain within the same pixel. If the same pixel is 
-revisited on a later time, that observation is kept as a separate occurrence. For each temporal 
-segment, the function returns mean x and y coordinates, the start and end timestamps, the mean 
-timestamp and the elapsed time.}
+{Reduces a set of input samples (\emph{xy}) based on their corresponding pixel coordinates
+within a reference raster (\emph{img}). Using this data, the function identifies temporal segments
+corresponding to groups of consecutive samples found within the same pixel. In this process, revisits
+to recorded pixels are preserved. Once the segments are identified, the function derives mean x and y
+coordinates for each of them and evaluates the time spent within each pixel. The function reports on
+the start and end timestamps, the mean timestamp and the elapsed time. The output of the function
+consists of:
+\itemize{
+\item{\emph{r.shp} - Shapefile with reduced sample set and its corresponding temporal information.}
+\item{\emph{total.time} - Raster showing the total time spent at each pixel.}
+\item{\emph{indices} - Indices for each sample in \emph{xy} showing which samples were aggregated.}}
+
+}
 }
 \examples{
 {
- 
+
  require(raster)
 
  # read raster data
- r <- raster(system.file('extdata', 'tcb_1.tif', package="rsMove"))
- 
+ r <- raster(system.file('extdata', '2013-07-16_ndvi.tif', package="rsMove"))
+
  # read movement data
- moveData <- read.csv(system.file('extdata', 'konstanz_20130804.csv', package="rsMove"))
- moveData <- SpatialPointsDataFrame(moveData[,1:2], moveData, proj4string=crs(r))
- 
+ data(shortMove)
+
  # observation time
- o.time <- strptime(paste0(moveData@data$date, ' ', moveData@data$time), format="\%Y/\%m/\%d \%H:\%M:\%S")
- 
+ obs.time <- strptime(paste0(shortMove@data$date, ' ', shortMove@data$time),
+ format="\%Y/\%m/\%d \%H:\%M:\%S")
+
  # reduce amount of samples
- move.reduce <- moveReduce(xy=moveData, ot=o.time, img=r)
- 
+ move.reduce <- moveReduce(xy=shortMove, obs.time=obs.time, img=r)
+
 }
 }
 \seealso{

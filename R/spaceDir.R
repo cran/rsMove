@@ -1,71 +1,61 @@
 #' @title spaceDir
 #'
-#' @description Spatial directional raster analysis.
+#' @description Analysis of environmental change in space along a set of coordinate pairs.
 #' @param xy Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.
-#' @param ot Object of class \emph{Date}, \emph{POSIXlt} or \emph{POSIXct} with \emph{xy} observation dates.
+#' @param obs.time Object of class \emph{Date}, \emph{POSIXlt} or \emph{POSIXct} with \emph{xy} observation dates.
 #' @param img Object of class \emph{RasterLayer}.
-#' @param dir One of \emph{fwd}, \emph{bwd} or \emph{both}. Default is \emph{both}.
-#' @param type One of 'cont' or 'cat'. Defines which type of variable is in use.
-#' @param dm One of 'm' or 'deg' specifying the projection unit. Default is 'm'.
-#' @param b.size Buffer size expressed in the map units.
-#' @param fun Summary function.
-#' @param npx Minimum number of pixels used in \emph{fun}. Default is 2.
-#' @import raster sp rgdal
+#' @param sample.direction One of \emph{forward}, \emph{backward} or \emph{both}. Default is \emph{both}.
+#' @param data.type One of 'cont' or 'cat'. Defines which type of variable is in use.
+#' @param distance.method One of 'm' or 'deg' specifying the projection unit. Default is 'm'.
+#' @param buffer.size Spatial buffer size expressed in the map units.
+#' @param stat.fun Output statistical metric.
+#' @param min.count Minimum number of pixels required by \emph{stat.fun}. Default is 2.
+#' @importFrom raster extract
 #' @importFrom stats lm
+#' @importFrom grDevices colorRampPalette
+#' @importFrom ggplot2 aes_string geom_line theme scale_color_gradientn xlab ylab
 #' @seealso \code{\link{timeDir}} \code{\link{dataQuery}} \code{\link{imgInt}}
-#' @return A \emph{list}.
-#' @details {This function evaluates how do environmental conditions change in space
-#' along a movement track. First, it looks at consectuve observations to define spatial segments.
-#' All the pixels between the two endpoints of the segment are considered in this process.
-#' The user can use the argument \emph{dir} to prompt the function to focus on previous
-#' (\emph{bwd}) or following (\emph{fwd}) observations or to look in both directions (\emph{both})
-#' when defining the segments. The output consists of a list containing two shapefiles, one
-#' \emph{SpatialPointsDataFrame} (\emph{$endpoints}) with the endpoints of each segment and a
-#' \emph{SpatialLinesDataFrame} (\emph{$segments}) representing each segment. The data frames provided
-#' with these shapefiles reports on:
+#' @return A \emph{list} containing shapefiles with information on environmental change and travel distance/time and a plot of the results.
+#' @details {This function evaluates how do environmental conditions change in space along a movement track. For
+#' each set of consecutive points, the function applies a spatial moving window which boundaries depend on the
+#' definition of \emph{sample.direction}. Then, within each segment, the function extracts all pixels within it.
+#' If \emph{buffer.size} is defined, the function will consider a buffer when performing this extraction. Finally,
+#' the the extracted \emph{NA} values are summarized into a given metric. If \emph{data.type} is \emph{cont}, a
+#' statistical function can be provided through \emph{stat.fun}. However, if \emph{data.type} is \emph{cat}, the
+#' function will report on the dominant class and on the shannon index for each segment. Note that the function
+#' will work with the raster value associated to each class. On top of this, \emph{spaceDir} will also report on
+#' the linear distance traveled between endpoints (in meters) and the travel time (in minutes). The output of the
+#' function is a list consisting of:
 #' \itemize{
-#'  \item{\emph{x} - mean x coordinates}
-#'  \item{\emph{y} - mean y coordinates}
-#'  \item{\emph{timestamp} - mean observation time}
-#'  \item{\emph{pixel.time} - elapsed time within a pixel for a given segment}
-#'  \item{\emph{travel.distance} - distance between a segment endpoints}
-#'  \item{\emph{travel.time} - elapsed time between a segment endpoints}}
-#'  The additionaly information added to the data frame depends on the type of data. If \emph{type} is set
-#'  to \emph{'cont'}, the function will assume the input raster is a continuous variable as estimate a
-#'  statistical metric for each segment. If none is provided throught the keyword \emph{fun}, the slope
-#'  will be returned by default and assigned to the column \emph{'stat'} within the output data frame. If
-#'  \emph{type} is set to '\emph{'cat'}, the function will assume the data is categorical. As a result,
-#'  the keyword \emph{fun} is ignored. Instead, the function will return the proportion of pixels occupied
-#'  by each class for each segment. In addition, the dominant class (\emph{'main'}) and the shannon index
-#'  (\emph{'shannon'}) will be returned for each segment within the output data frame. In order to include
-#'  the area surrounding the sample points in this analysis, \emph{d.buffer} can be used. This keyword
-#'  dilates the interpolated sample points by a given distance transforming the initial line into a polygon.}
-#'  @note {If \emph{d.buffer} is used, the default \emph{fun} (the slope) is not adequate given that spatial
-#'  order of the samples is not preserved. This should be considered when using these keywords simulaneously,}
+#'  \item{\emph{endpoints} - Point shapefile with endpoints of each spatial segment. Reports on a given statistical metric, traveled distance, travel time and the mean timestamp.}
+#'  \item{\emph{segments} - Line shapefile with spatial segments. Reports on the same information as \emph{endpoints}.
+#'  \item{\emph{plot} - Plotting of \emph{segments} where each segment is colored according to its corresponding statistical value.}}}}
+#'
 #' @examples {
 #'
 #'  require(raster)
 #'
 #'  # read raster data
-#'  r <- raster(system.file('extdata', 'tcb_1.tif', package="rsMove"))
+#'  r <- raster(system.file('extdata', '2013-07-16_ndvi.tif', package="rsMove"))
 #'
 #'  # read movement data
-#'  moveData <- read.csv(system.file('extdata', 'konstanz_20130804.csv', package="rsMove"))
-#'  moveData <- SpatialPointsDataFrame(moveData[,1:2], moveData, proj4string=crs(r))
+#'  data(shortMove)
 #'
 #'  # observation time
-#'  ot <- strptime(paste0(moveData@data$date, ' ',moveData@data$time), format="%Y/%m/%d %H:%M:%S")
+#'  obs.time <- strptime(paste0(shortMove@data$date, ' ',shortMove@data$time),
+#'  format="%Y/%m/%d %H:%M:%S")
 #'
 #'  # perform directional sampling
 #'  of <- function(x) {lm(x~c(1:length(x)))$coefficients[2]}
-#'  s.sample <- spaceDir(xy=moveData, ot=ot, img=r, dir="bwd", type='cont', fun=of)
+#'  s.sample <- spaceDir(xy=shortMove, obs.time=obs.time, img=r,
+#'  sample.direction="backward", data.type='cont', stat.fun=of)
 #'
 #' }
 #' @export
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 
-spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size=NULL, fun=NULL, npx=2) {
+spaceDir <- function(xy=xy, obs.time=NULL, img=img, sample.direction=sample.direction, data.type=data.type, distance.method='m', buffer.size=NULL, stat.fun=NULL, min.count=2) {
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 # 1. check variables
@@ -76,9 +66,9 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
   if (!class(xy)%in%c('SpatialPoints', 'SpatialPointsDataFrame')) {stop('"xy" is not of a valid class')}
 
   # sample dates
-  if (!is.null(ot)) {
-    if (!class(ot)[1]%in%c('Date', 'POSIXct', 'POSIXlt')) {stop('"ot" is nof of a valid class')}
-    if (length(ot)!=length(xy)) {stop('errorr: "xy" and "ot" have different lengths')}}
+  if (!is.null(obs.time)) {
+    if (!class(obs.time)[1]%in%c('Date', 'POSIXct', 'POSIXlt')) {stop('"obs.time" is nof of a valid class')}
+    if (length(obs.time)!=length(xy)) {stop('errorr: "xy" and "obs.time" have different lengths')}}
 
   # raster
   if (!exists('img')) {stop('"img" is missing')}
@@ -86,18 +76,18 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
   if (crs(xy)@projargs!=crs(img)@projargs) {stop('"xy" and "img" have different projections')}
 
   # query direction
-  if (!is.null(dir)) {
-    if (length(dir)>1) {stop('"dir" has too many entries')}
-    if (!dir%in%c('bwd', 'fwd', 'both')) {stop('"dir" is not a valid entry')}
-  } else {dir <- 'both'}
+  if (!is.null(sample.direction)) {
+    if (length(sample.direction)>1) {stop('"sample.direction" has too many entries')}
+    if (!sample.direction%in%c('backward', 'forward', 'both')) {stop('"sample.direction" is not a valid entry')}
+  } else {sample.direction <- 'both'}
 
-  # variable type
-  if (is.null(type)) {stop('"type" is missing')} else {
-    if (!type%in%c('cont', 'cat')) {stop('"type" is not a recognized keyword')}}
+  # variable data.type
+  if (is.null(data.type)) {stop('"data.type" is missing')} else {
+    if (!data.type%in%c('cont', 'cat')) {stop('"data.type" is not a recognized keyword')}}
 
   # check/define input metrics
-  if (is.null(fun)) {fun <- function(x) {lm(x~c(1:length(x)))$coefficients[2]}} else {
-    if(!is.function(fun)) {stop('"fun" is not a valid function')}}
+  if (is.null(stat.fun)) {stat.fun <- function(x) {lm(x~c(1:length(x)))$coefficients[2]}} else {
+    if(!is.function(stat.fun)) {stop('"stat.fun" is not a valid function')}}
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 # 2. select pixels between consecutive points
@@ -108,12 +98,12 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
   pxr <- res(img)
 
   # backward sampling
-  if (dir=='bwd') {
+  if (sample.direction=='backward') {
     f1 <- function(i) {
       si <- i-1
       ei <- i
       d0 <- sqrt((xy@coords[si,1]-xy@coords[ei,1])^2 + (xy@coords[si,2]-xy@coords[ei,2])^2)
-      if (!is.null(ot)) {t0 <- difftime(ot[ei], ot[si], units='mins')} else {t0 <- NA}
+      if (!is.null(obs.time)) {t0 <- difftime(obs.time[ei], obs.time[si], units='mins')} else {t0 <- NA}
       x0 <- xy@coords[si:ei,1]
       y0 <- xy@coords[si:ei,2]
       if((d0 > (pxr[1]*2))) {
@@ -129,7 +119,7 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
           if (dy>0) {cm<- -((0:round(abs(dy)/pxr[1]))*pxr[1])} else {cm<- ((0:round(abs(dy)/pxr[1]))*pxr[1])}
           y0 <- (y0[1]+cm)
           x0 <- m[1] + y0 * m[2]}}
-      if (dm=='deg') {
+      if (distance.method=='deg') {
         x00 <- xy@coords[si:ei,1]*pi/180
         y00 <- xy@coords[si:ei,2]*pi/180
         sf <- function(o) {
@@ -143,12 +133,12 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
     op <- lapply(2:length(xy), f1)}
 
   # forward sampling
-  if (dir=='fwd') {
+  if (sample.direction=='forward') {
     f1 <- function(i) {
       si <- i
       ei <- i+1
       d0 <- sqrt((xy@coords[si,1]-xy@coords[ei,1])^2 + (xy@coords[si,2]-xy@coords[ei,2])^2)
-      if (!is.null(ot)) {t0 <- difftime(ot[ei], ot[si], units='mins')} else {t0 <- NA}
+      if (!is.null(obs.time)) {t0 <- difftime(obs.time[ei], obs.time[si], units='mins')} else {t0 <- NA}
       x0 <- xy@coords[si:ei,1]
       y0 <- xy@coords[si:ei,2]
       if((d0 > (pxr[1]*2))) {
@@ -164,7 +154,7 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
           if (dy>0) {cm<- -((0:round(abs(dy)/pxr[1]))*pxr[1])} else {cm<-((0:round(abs(dy)/pxr[1]))*pxr[1])}
           y0 <- (y0[1]+cm)
           x0 <- m[1] + y0 * m[2]}}
-      if (dm=='deg') {
+      if (distance.method=='deg') {
         x00 <- xy@coords[si:ei,1]*pi/180
         y00 <- xy@coords[si:ei,2]*pi/180
         sf <- function(o) {
@@ -178,12 +168,12 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
     op <- lapply(1:(length(xy)-1), f1)}
 
   # backward-forward sampling
-  if (dir=='both') {
+  if (sample.direction=='both') {
     f1 <- function(i) {
       si <- i-1
       ei <- i+1
       d0 <- sqrt((xy@coords[si,1]-xy@coords[ei,1])^2 + (xy@coords[si,2]-xy@coords[ei,2])^2)
-      if (!is.null(ot)) {t0 <- difftime(ot[ei], ot[si], units='mins')} else {t0 <- NA}
+      if (!is.null(obs.time)) {t0 <- difftime(obs.time[ei], obs.time[si], units='mins')} else {t0 <- NA}
       x0 <- xy@coords[si:ei,1]
       y0 <- xy@coords[si:ei,2]
       if((d0 > (pxr[1]*2))) {
@@ -210,7 +200,7 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
               y00[(o-1)] <- ty}}
         x0 <- unlist(x00)
         y0 <- unlist(y00)}
-      if (dm=='deg') {
+      if (distance.method=='deg') {
         x00 <- xy@coords[si:ei,1]*pi/180
         y00 <- xy@coords[si:ei,2]*pi/180
         sf <- function(o) {
@@ -238,14 +228,14 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
 
   # I. apply spatial buffer (if prompted)
   # II. retrieve environmental variables
-  if (!is.null(b.size)) {
+  if (!is.null(buffer.size)) {
 
     # dilate samples and update sample indices
     tmp <- lapply(unique(us), function(x) {
       ind <- which(us==x)
       ind <- do.call(rbind, lapply(ind, function(y) {
-        r0 <- raster(extent((xc[y]-b.size), (xc[y]+b.size),
-                            (yc[y]-b.size), (yc[y]+b.size)),
+        r0 <- raster(extent((xc[y]-buffer.size), (xc[y]+buffer.size),
+                            (yc[y]-buffer.size), (yc[y]+buffer.size)),
                      res=pxr[1], crs=rProj)
         return(xyFromCell(r0, 1:ncell(r0)))}))
       ind <- ind[!duplicated(cellFromXY(img, ind)),]
@@ -267,20 +257,20 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
 # 4. analyze samples
 #-------------------------------------------------------------------------------------------------------------------------------#
 
-  if (type=='cont') {
+  if (data.type=='cont') {
 
     # query function
     f2 <- function(i) {
       ind <- which(us1==i)
       u <- which(!is.na(edata[ind]))
-      if (sum(u) >= npx) {return(as.numeric(fun(as.numeric(edata[ind[u]]))))} else {return(NA)}}
+      if (sum(u) >= min.count) {return(as.numeric(stat.fun(as.numeric(edata[ind[u]]))))} else {return(NA)}}
 
     # apply user provided functon
     ov <- data.frame(stat=sapply(unique(us1), f2))
 
   }
 
-  if (type=='cat') {
+  if (data.type=='cat') {
 
     # unique classes
     uc <- unique(img)
@@ -313,7 +303,7 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
   us0 <- unique(us)
 
   # subset variables (depends on sampling strategy)
-  df <- data.frame(x=xy@coords[us0,1], y=xy@coords[us0,2], timestamp=ot[us0], travel.distance=pd, travel.time=td, sid=us0)
+  df <- data.frame(x=xy@coords[us0,1], y=xy@coords[us0,2], timestamp=obs.time[us0], travel.distance=pd, travel.time=td, sid=us0)
   df <- cbind(df, ov)
 
   # build segment endpoint shapefile
@@ -335,7 +325,7 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
 
   cr <- colorRampPalette(c("dodgerblue3", "khaki2", "forestgreen"))
 
-  if (type=="cont") {
+  if (data.type=="cont") {
 
     p <- ggplot(fl, aes_string(x="long", y="lat", color="stat", group="group")) + theme_bw() +
       geom_path(size=2) + xlab("X") + ylab("Y") +
@@ -348,7 +338,7 @@ spaceDir <- function(xy=xy, ot=NULL, img=img, dir=dir, type=type, dm='m', b.size
 
   }
 
-  if (type=="cat") {
+  if (data.type=="cat") {
 
     mv <- round(max(df$shannon, na.rm=T))
     nc <- nchar(as.character(mv))

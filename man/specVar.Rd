@@ -4,36 +4,30 @@
 \alias{specVar}
 \title{specVar}
 \usage{
-specVar(img = img, xy = NULL, pxr = pxr)
+specVar(img = img, pixel.res = pixel.res)
 }
 \arguments{
 \item{img}{Object of class \emph{RasterLayer}.}
 
-\item{xy}{Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.}
-
-\item{pxr}{vector of target resolutions.}
+\item{pixel.res}{Spatial resolution (unit depends on the spatial projection).}
 }
 \value{
 A \emph{list}.
 }
 \description{
-Quantifies how changes in the resolution of a raster affects the perception of spectral complexity.
+{Tool to support the selection of adequate satellite spatial resolution. Evaluates
+how the spectral variability within a pixel change with the change in spatial resolution.}
 }
 \details{
-{Given a raster object, the function determines how reducing the resolution
-of the raster impacts our ability to perceive the complexity of the landscape. The
-function aggregates \emph{img} to each of the given pixel resolutions (\emph{pxr})
-and estimates the Mean Absolute Error (MAE) for each pixel with the aggregated
-layer where the differences are estimated from the pixel within the original raster
-that overlap with the target pixel. If a point shapefile is provided (\emph{xy}),
-the function will only report on the values that overlap with the points. The output
-of the function consists of:
+{Given a raster object (\emph{img}), the function determines how degrading its spatial resolution impacts
+our ability to perceive the complexity of the landscape. For the pixel resolution given by \emph{pixel.res}, The
+function resamples \emph{img} and estimates the Mean Absolute Percentage Error (MAPE) for each pixel. The MAPE is
+estimated as \eqn{100 / n * sum(abs(O - A / O)} where \emph{O} are the original value in \emph{img}, \emph{A} the
+aggregated value in the aggregated image and \emph{n} the number of non-NA pixels in the original image The
+output of the function consists of:
 \itemize{
- \item{\emph{mae} - MAE, either for all pixels or for the points within \emph{xy}}
- \item{\emph{pixel.optimal} - raster reporting on the resolution with the lowest MAE for each pixel}
- \item{\emph{pixel.optimal.stats} - Proportion of samples per resolution derived from \emph{pixel.optimal}}
- \item{\emph{plot} - boxplots of the variability of the MAE per resolution}}
-If \emph{xy} is set, the output will contain a vector with the optimal resolution per sample (\emph{$sample.optimal}).}
+ \item{\emph{mape} - MAPE raster.}
+ \item{\emph{plot} - Histogram of \emph{mape}.}}}
 }
 \examples{
 \dontrun{
@@ -41,14 +35,10 @@ If \emph{xy} is set, the output will contain a vector with the optimal resolutio
  require(raster)
 
  # read raster data
- r <- raster(system.file('extdata', 'tcb_1.tif', package="rsMove"))
-
- # read movement data
- moveData <- read.csv(system.file('extdata', 'konstanz_20130804.csv', package="rsMove"))
- moveData <- SpatialPointsDataFrame(moveData[,1:2], moveData, proj4string=crs(r))
+ r <- raster(system.file('extdata', '2013-07-16_ndvi.tif', package="rsMove"))
 
  # apply function
- s.var <- specVar(img=r, xy=moveData, pxr=60)
+ s.var <- specVar(img=r, pixel.res=60)
 
 }
 }

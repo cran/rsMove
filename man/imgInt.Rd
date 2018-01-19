@@ -4,60 +4,62 @@
 \alias{imgInt}
 \title{imgInt}
 \usage{
-imgInt(img = NULL, rd = rd, td = td, bs = NULL, xy = NULL,
-  edata = NULL)
+imgInt(env.data = env.data, env.dates = env.dates,
+  target.dates = target.dates, time.buffer = time.buffer, xy = NULL)
 }
 \arguments{
-\item{img}{Object of class \emph{RasterStack} or \emph{RasterBrick}.}
+\item{env.data}{Object of class \emph{RasterStack}, \emph{RasterBrick} or \emph{data.frame}.}
 
-\item{rd}{Raster dates. Object of class \emph{Date}.}
+\item{env.dates}{Object of class \emph{Date} with dates of \emph{env.data}.}
 
-\item{td}{Target dates. Object of class \emph{Date}.}
+\item{target.dates}{Object of class \emph{Date} with target dates.}
 
-\item{bs}{wo element vector with temporal search buffer (expressed in days).}
+\item{time.buffer}{A two-element vector with temporal search buffer (expressed in days).}
 
 \item{xy}{Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.}
-
-\item{edata}{Object of class \emph{data frame} or \emph{matrix} with remote sensing data.}
 }
 \value{
-A \emph{RasterBrick} or a \emph{data frame}.
+A \emph{RasterBrick} or a \emph{data frame}. If a \emph{RasterBrick}, each layer represents a date. If a \emph{data.frame}, columns represent dates and rows represent samples.
 }
 \description{
-Temporal linear interpolation of raster data.
+{Temporal linear interpolation of environmental data using
+a \emph{raster}, \emph{SpatialPointsDataFrames} or \emph{data frames}.}
 }
 \details{
-{Performs a pixel-wise linear interpolation over a raster for a given set of dates (\emph{td}). 
-A teporal buffer (\emph{bs}) is required to limit the search for reference data points (\emph{rd}). \emph{bs} 
-is defined by a two element vector which limits the search of images in the past and future. If \emph{xy} is 
-provided the function only considers the pixels that overlap with the these sample points. Otherwise, a RasterBrick 
-is provided. However, if \emph{edata} is provided, \emph{xy} and \emph{img} are ignored. and a data frame is provided.}
+{Performs a pixel-wise linear interpolation over a raster for a given set of dates (\emph{target.dates}).
+A temporal buffer (\emph{time.buffer}) is required to limit the search for reference data points (\emph{time.buffer}).
+This is defined by a two element vector which limits the search in the past and future. If \emph{xy} is provided and
+\emph{env.data} is a \emph{raster} object the function only considers the pixels that overlap with the shapefile.
+Otherwise, all pixels are considered providing a \emph{RasterBrick}. However, if \emph{env.data} is a \emph{data.frame},
+\emph{xy} is ignored.}
 }
 \examples{
 {
- 
+
  require(raster)
- 
+
  #'  # read raster data
- file <- list.files(system.file('extdata', '', package="rsMove"), 'tc.*tif', full.names=TRUE)
- rsStk <- stack(file)
- rsStk <- stack(rsStk, rsStk, rsStk) # dummy files for the example
- 
+ file <- list.files(system.file('extdata', '', package="rsMove"), 'ndvi.tif', full.names=TRUE)
+ r.stk <- stack(file)
+ r.stk <- stack(r.stk, r.stk, r.stk) # dummy files for the example
+
  # read movement data
- moveData <- read.csv(system.file('extdata', 'konstanz_20130805-20130811.csv', package="rsMove"))
- moveData <- SpatialPointsDataFrame(moveData[1:10,1:2], moveData[1:10,], proj4string=crs(rsStk))
- 
+ data(shortMove)
+
  # raster dates
- rd = seq.Date(as.Date("2012-01-01"), as.Date("2012-12-31"), 45)
- 
+ file.name <- names(r.stk)
+ env.dates <- as.Date(paste0(substr(file.name, 2, 5), '-',
+ substr(file.name, 7, 8), '-', substr(file.name, 10, 11)))
+
  # target dates
- td = as.Date("2012-04-01")
- 
+ target.dates = as.Date("2012-04-01")
+
  # interpolate raster data to target dates
- i.img <- imgInt(img=rsStk, rd=rd, td=td, bs=c(60,60), xy=moveData)
- 
+ i.env.data <- imgInt(env.data=r.stk, env.dates=env.dates,
+ target.dates=target.dates, time.buffer=c(60,60), xy=shortMove)
+
 }
 }
 \seealso{
-@seealso \code{\link{dataQuery}} \code{\link{timeDir}} \code{\link{spaceDir}} \code{\link{moveSeg}}
+\code{\link{dataQuery}} \code{\link{timeDir}} \code{\link{spaceDir}} \code{\link{moveSeg}}
 }

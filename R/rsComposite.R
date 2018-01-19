@@ -1,39 +1,34 @@
 #' @title rsComposite
 #'
-#' @description Compositing of remote sensing data based on GPS tracking dates.
-#' @param img Object of class \emph{RasterSpack} or \emph{RasterBrick}.
-#' @param rd Object of class \emph{Date} with \emph{img} observation dates.
-#' @param ot Object of class \emph{Date} with reference dates.
-#' @param cm Number of deviations from the target date. Default is 1.
-#' @param type One of "norm" or "pheno" or "pheno2".
-#' @param d.buffer Search buffer (expressed in days).
-#' @import raster rgdal
+#' @description {Phenological and date driven Pixel Based Compositing (PBC)
+#' of remote sensing data supported by GPS tracking date information.}
+#' @param img Object of class \emph{RasterStack} or \emph{RasterBrick}.
+#' @param img.dates Object of class \emph{Date} with \emph{img} observation dates.
+#' @param obs.dates Object of class \emph{Date} with reference dates.
+#' @param comp.method One of "closest" or "phenological".
+#' @param temporal.buffer Search buffer (expressed in days). The default is 30.
+#' @importFrom raster nlayers calc cellStats
 #' @importFrom stats lm
-#' @seealso \code{\link{imgInt}} \code{\link{dataQuery}} \code{\link{proSat}}
+#' @seealso \code{\link{imgInt}} \code{\link{dataQuery}}
 #' @return A \emph{list}.
-#' @details {The function uses a multi-layer raster object to build a composite.
-#' It looks at a ginve set of dates (e.g. GPS tracking dates) and estimates a
-#' reference date to build the composite for defined by the median of \emph{ot}.
-#' The median is then used to estimate Median Absolute Deviation (MAD) which
-#' specifies the size of the buffer set aroung the target date within which
-#' bands will be considered. Here, \emph{cm} is used as a multiplier to enlarge
-#' the temporal buffer. Alternatively, a user define temporal buffer is allowed
-#' by using the keyword \emph{d.buffer}. If \emph{ot} countains only one element,
-#' the function will use it as a reference date. In this case, if \emph{d.buffer}
-#' is NULL the function will set it to 30 by default. The way how the function handles
-#' temporal information depends on the \emph{type} keyword. If set to \emph{norm},
-#' the function will search for the nearest possible dates within the temporal
-#' buffer. However, if \emph{pheno} is set, then the day of the year will be given
-#' priority. Thus, if multi-year raster data is provided, older data with a DOY
-#' closer to the target that will be used when possible. The output provides:
+#' @details {The function uses a multi-layer raster object to build a composite for
+#' a reference date which corresponds to the median of \emph{obs.dates}. Moreover,
+#' the function determines the Median Absolute Deviation (MAD) of \emph{obs.dates}
+#' which determines the temporal buffer that is used to search for usable images.
+#' As an alternative, \emph{temporal.buffer} can be specified manually and will
+#' be required if \emph{obs.dates} consists of a single value. The user can also
+#' specify how the compositing should be done. \emph{comp.method} can be set to:
 #' #' \itemize{
-#'  \item{\emph{value} - composite of target images}
-#'  \item{\emph{dates} - per pixel date code}
-#'  \item{\emph{count} - pixel count of \emph{dates}}
-#'  \item{\emph{na.count} - count of NA values}
-#'  \item{\emph{target} - target date}
-#'  \item{\emph{mad} - temporal buffer}}
-#'  If \emph{pheno2} is used, for each pixel, the function wilhin estimate a weighted
+#'  \item{\emph{closest} - Uses layer with the closest possible date in relation to the reference date.}
+#'  \item{\emph{phenological} - Uses the layer with the Day of the Year (DoY) in relation to the reference date.}}
+#' The final output of \emph{rsComposite} is a list consisting of:
+#' #' \itemize{
+#'  \item{\emph{composite} - Final image composite}
+#'  \item{\emph{dates} - Temporal composition of the composite reporting on the julian day}
+#'  \item{\emph{pixel.count} - pixel count of unique values in \emph{dates}. Additionally, it reports on NA values.}
+#'  \item{\emph{target.date} - Reference date used during compositing.}
+#'  \item{\emph{temporal.buffer} - Temporal buffer used during compositing.}}
+#'  If \emph{pheno2} is used, for each pixel, the function will estimate a weighted
 #'  mean of the clear pixels within the temporal buffer. The weights represent the
 #'  inverse time difference between the target and the available dates giver higher
 #'  weights to small differences.}
@@ -42,141 +37,118 @@
 #'  require(raster)
 #'
 #'  # read raster data
-#'  file <- list.files(system.file('extdata', '', package="rsMove"), 'tc.*tif', full.names=TRUE)
-#'  rsStk <- stack(file)
-#'  rsStk <- stack(rsStk, rsStk, rsStk) # dummy files for the example
+#'  file <- list.files(system.file('extdata', '', package="rsMove"), 'ndvi.tif', full.names=TRUE)
+#'  r.stk <- stack(file)
+#'  r.stk <- stack(r.stk, r.stk, r.stk) # dummy files for the example
 #'
 #'  # raster dates
-#'  rd = seq.Date(as.Date("2013-01-01"), as.Date("2013-12-31"), 45)
+#'  file.name <- names(r.stk)
+#'  img.dates <- as.Date(paste0(substr(file.name, 2, 5), '-',
+#'  substr(file.name, 7, 8), '-', substr(file.name, 10, 11)))
 #'
 #'  # target date
-#'  ot = as.Date("2013-06-01")
+#'  obs.dates = as.Date("2013-06-01")
 #'
 #'  # build composite
-#'  r.comp <- rsComposite(rsStk, rd, ot, d.buffer=90)
+#'  r.comp <- rsComposite(r.stk, img.dates, obs.dates, comp.method="closest", temporal.buffer=90)
 #'
 #' }
 #' @export
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 
-rsComposite <- function(img, rd, ot, cm=1, type='norm', d.buffer=NULL) {
+rsComposite <- function(img, img.dates, obs.dates, comp.method='closest', temporal.buffer=NULL) {
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 # 1. check variables
 #-------------------------------------------------------------------------------------------------------------------------------#
 
   # raster
-  if (!exists('img')) {stop('error: "img" is missing')}
-  if (!class(img)[1]%in%c('RasterStack', 'RasterBrick')) {stop('error: "img" is not of a valid class')}
+  if (!class(img)[1]%in%c('RasterStack', 'RasterBrick')) {stop('"img" is not of a valid class')}
 
   # raster dates
-  if (!exists('rd')) {stop('error: "rd" is missing')}
-  if (!class(rd)[1]%in%c('Date')) {stop('error: "rd" is nof of a valid class')}
-  if (length(rd)!=nlayers(img)) {stop('errorr: "img" and "rd" have different lengths')}
+  if (!class(img.dates)[1]%in%c('Date')) {stop('"img.dates" is nof of a valid class')}
+  if (length(img.dates)!=nlayers(img)) {stop('"img" and "img.dates" have different lengths')}
 
   # reference dates
-  if (!exists('ot')) {stop('"ot" is missing')}
-  if (!class(ot)[1]%in%c('Date')) {stop('error: "ot" is nof of a valid class')}
+  if (!class(obs.dates)[1]%in%c('Date')) {stop('"obs.dates" is nof of a valid class')}
 
   # auxiliary variables
-  if (!is.numeric(cm)) {stop('"cm" is not numeric')}
-  if (!is.null(d.buffer)) {if (!is.numeric(d.buffer)) {stop('"d.buffer" is not numeric')}}
-  if (!type%in%c('norm', 'pheno')) {stop('"type" is not a valid keyword')}
+  if (!is.null(temporal.buffer)) {if (!is.numeric(temporal.buffer)) {stop('"temporal.buffer" is not numeric')}}
+  if (!comp.method%in%c('closest', 'phenological')) {stop('"comp.method" is not a valid keyword')}
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 # 2. handle time information
 #-------------------------------------------------------------------------------------------------------------------------------#
 
   # determine date format
-  if (type=='norm') {
-    ot0 <- ot
-    rd0 <- rd}
-  if (type=='pheno' | type=='pheno2') {
-    bd <- as.Date(paste0(as.character(format(ot,'%Y')), '-01-01'))
-    ot0 <- as.numeric((ot-bd) + 1)
-    bd <- as.Date(paste0(as.character(format(rd,'%Y')), '-01-01'))
-    rd0 <- as.numeric((rd-bd) + 1)}
+  if (comp.method=='closest') {
+    obs.dates <- obs.dates
+    img.dates <- img.dates}
+  if (comp.method=='phenological' | comp.method=='pheno2') {
+    bd <- as.Date(paste0(as.character(format(obs.dates,'%Y')), '-01-01'))
+    obs.dates <- as.numeric((obs.dates-bd) + 1)
+    bd <- as.Date(paste0(as.character(format(img.dates,'%Y')), '-01-01'))
+    img.dates <- as.numeric((img.dates-bd) + 1)}
 
   # determine date range
-  if (length(ot)>1) {
-    t.date <- median(ot0) # target date
-    if (is.null(d.buffer)) {d.buffer <- median(abs(ot0-t.date))*cm} # search buffer
+  if (length(obs.dates)>1) {
+    t.date <- median(obs.dates) # target date
+    if (is.null(temporal.buffer)) {temporal.buffer <- median(abs(obs.dates-t.date))} # search buffer
   } else {
-    t.date <- ot0
-    if (is.null(d.buffer)) {d.buffer <- 30}
+    t.date <- obs.dates
+    if (is.null(temporal.buffer)) {temporal.buffer <- 30}
   }
 
-
-  if (type=="norm" | type=="pheno") {
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 # 3. define functions
 #-------------------------------------------------------------------------------------------------------------------------------#
 
-    # compositing
-    f1 <- function(x) {
-      ind <- which(!is.na(x))
-      if (length(ind)>0) {
-        v <- x[ind]
-        d <- rd0[ind]
-        diff <- abs(d-t.date)
-        ind <- which(diff <= d.buffer)
-        if (length(ind)>0) {v[ind[which(diff[ind]==min(diff[ind]))]]
-        } else {return(NA)}} else {return(NA)}}
+  # compositing function
+  f1 <- function(x) {
+    ind <- which(!is.na(x))
+    if (length(ind)>0) {
+      v <- x[ind]
+      d <- img.dates[ind]
+      diff <- abs(d-t.date)
+      ind <- which(diff <= temporal.buffer)
+      if (length(ind)>0) {v[ind[which(diff[ind]==min(diff[ind]))]]
+      } else {return(NA)}} else {return(NA)}}
 
-    # retrieve date
-    f2 <- function(x) {
-      ind <- which(!is.na(x))
-      if (length(ind)>0) {
-        v <- x[ind]
-        d <- rd0[ind]
-        diff <- abs(d-t.date)
-        ind <- which(diff <= d.buffer)
-        if (length(ind)>0) {as.numeric(d[ind[which(diff[ind]==min(diff[ind]))]])
-        } else {return(NA)}} else {return(NA)}}
-
-#-------------------------------------------------------------------------------------------------------------------------------#
-# 4. build composites
-#-------------------------------------------------------------------------------------------------------------------------------#
-
-    r.value <- calc(img, f1)
-    r.date <- calc(img, f2)
+  # function to report on temporal composition
+  f2 <- function(x) {
+    ind <- which(!is.na(x))
+    if (length(ind)>0) {
+      v <- x[ind]
+      d <- img.dates[ind]
+      diff <- abs(d-t.date)
+      ind <- which(diff <= temporal.buffer)
+      if (length(ind)>0) {as.numeric(d[ind[which(diff[ind]==min(diff[ind]))]])
+      } else {return(NA)}} else {return(NA)}}
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 # 4. build composites
 #-------------------------------------------------------------------------------------------------------------------------------#
 
-    # build table from date info
-    ud <- unique(r.date)
-    used <- rd0[as.numeric(rd0)%in%ud]
-    ud <- as.numeric(rd0)
-    count <- sapply(ud, function(x) {cellStats(r.date==x, sum)})
-    df <- data.frame(date=used, value=ud, count=count)
+  r.value <- calc(img, f1)
+  r.date <- calc(img, f2)
 
-    # check for missing values
-    mv <- cellStats(is.na(r.date), sum)
+#-------------------------------------------------------------------------------------------------------------------------------#
+# 5. build output
+#-------------------------------------------------------------------------------------------------------------------------------#
 
-    # return data
-    return(list(value=r.value, date=r.date, count=df, na.count=mv, target=t.date, buffer=d.buffer))
+  # build table from date info
+  ud <- unique(r.date)
+  used <- img.dates[as.numeric(img.dates)%in%ud]
+  ud <- as.numeric(img.dates)
+  count <- sapply(ud, function(x) {cellStats(r.date==x, sum)})
+  df <- data.frame(date=used, code=ud, count=count)
 
-  } else {
+  # check for missing values
+  df <- rbind(df, c(NA, NA, cellStats(is.na(r.date), sum)))
 
-    # averaging function
-    f1 <- function(x) {
-      ind <- which(!is.na(x))
-      if (length(ind)>0) {
-        v <- x[ind]
-        d <- rd0[ind]
-        diff <- abs(d-t.date)
-        w <- 1 - (diff/max(diff))
-        ind <- which(diff <= d.buffer)
-        if (length(ind)>0) {sum(v[ind]*w[ind]) / sum(w[ind])} else {
-          return(NA)}} else {return(NA)}}
-
-    # apply function to raster
-    return(calc(img, f1))
-
-  }
+  # return data
+  return(list(composite=r.value, dates=r.date, pixel.count=df, target.date=t.date, temporal.buffer=temporal.buffer))
 
 }

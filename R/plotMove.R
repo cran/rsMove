@@ -1,69 +1,66 @@
 #' @title plotMove
 #'
-#' @description Plots per pixel time and value.
+#' @description {Standardized plotting of environmental and temporal information for a set of coordinate pairs.}
 #' @param x Vector of x coordinates.
 #' @param y Vector of y coordinates.
-#' @param o.time Vector with time length.
-#' @param value Vector with environmental data.edata Object of class \emph{RasterLayer} or \emph{data.frame}.
-#' @param type One of 'cont' or 'cat'. Defines the type of \emph{value}.
-#' @import raster rgdal ggplot2
+#' @param size.var Optional. Vector with elapsed time as report by \code{\link{moveReduce}}, \code{\link{sampleMove}} or \code{\link{timeDir}}. Controls the point size.
+#' @param fill.var Optional. Vector with environmental information. Controls the fill color.
+#' @param var.type One of 'cont' or 'cat'. Defines the type of \emph{fill.var}.
+#' @importFrom ggplot2 ggplot aes_string theme geom_bar scale_fill_gradientn xlab ylab theme_bw geom_point guides scale_size_continuous scale_color_discrete scale_fill_gradientn scale_size_continuous
+#' @importFrom grDevices colorRampPalette
 #' @seealso \code{\link{dataQuery}} \code{\link{moveReduce}}
 #' @return A \emph{ggplot} object.
-#' @details {This function plots a provided set of x and y coordinates adding information on the elapsed time
-#' at each coordinate (\emph{e.time}) and/or a given environmental variable (\emph{value}). If only \emph{time}
-#' or \emph{value} are set, the function builds a scatterplot where the size of the points is defined by the input
-#' variables. If both are provided, the size of the points is defined by the elapsed time and the raster value is
-#' used to build a color scheme for the points. When \emph{value} is provided, the keyword \emph{type} is required.
-#' It will influence how the plots are built. The breaks a limits for the point size and colors is define automatically.}
+#' @details {This function was designed to extent on other functions such as \code{\link{dataQuery}}, which provides environmental
+#' information, and \code{\link{moveReduce}}, which provides information on the time spent per sample. Using these two functions
+#' as an example, \emph{plotMove} can represent the relation between the elapsed time and the change in environmental conditions.}
 #' @examples {
 #'
 #'  require(raster)
 #'
 #'  # read raster data
-#'  r <- raster(system.file('extdata', 'tcb_1.tif', package="rsMove"))
+#'  r <- raster(system.file('extdata', '2013-07-16_ndvi.tif', package="rsMove"))
 #'
 #'  # read movement data
-#'  moveData <- read.csv(system.file('extdata', 'konstanz_20130804.csv', package="rsMove"))
-#'  moveData <- SpatialPointsDataFrame(moveData[,1:2], moveData, proj4string=crs(r))
+#'  data(shortMove)
 #'
 #'  # observation time
-#'  o.time <- strptime(paste0(moveData@data$date, ' ', moveData@data$time), format="%Y/%m/%d %H:%M:%S")
+#'  time <- strptime(paste0(shortMove@data$date, ' ', shortMove@data$time), format="%Y/%m/%d %H:%M:%S")
 #'
 #'  # reduce amount of samples
-#'  move.reduce <- moveReduce(xy=moveData, ot=o.time, img=r)
+#'  move.reduce <- moveReduce(xy=shortMove, obs.time=time, img=r)
 #'
 #'  # query data
-#'  ov <- dataQuery(xy=move.reduce$points, img=r)
+#'  ov <- extract(r, move.reduce$points)
 #'
 #'  # plot output
-#'  x <- move.reduce$points@coords[,1]
-#'  y <- move.reduce$points@coords[,2]
-#'  et <- move.reduce$points@data$elapsed.time
-#'  op <- plotMove(x=x, y=y, o.time=et, value=ov[,1], type="cont")
+#'  x <- move.reduce$points@data$x
+#'  y <- move.reduce$points@data$y
+#'  et <- move.reduce$points@data$`Elapsed time (minutes)`
+#'  op <- plotMove(x=x, y=y, size.var=et, fill.var=ov, var.type="cont")
 #'
 #' }
 #' @export
 
 #----------------------------------------------------------------------------------------------------------#
 
-plotMove <- function(x=x, y=y, o.time=NULL, value=NULL, type=NULL) {
+plotMove <- function(x=x, y=y, size.var=NULL, fill.var=NULL, var.type=NULL) {
 
 #----------------------------------------------------------------------------------------------------------#
 # 1. Check input data
 #----------------------------------------------------------------------------------------------------------#
 
   if (length(x)!=length(y)) {stop('"x" and "y" have different lengths')}
-  if(!is.null(o.time)) {
-    if (!is.numeric(o.time)) {stop('"o.time" is nof of a valid class')}
-    if (length(o.time)!=length(x)) {stop('coordinates and "o.time" have different lengths')}}
-  if (!is.null(value)) {
-    if (is.null(type)) {stop('"value" is set. Please specify "type"')}
-    if (!type%in%c('cont', 'cat')) {stop('"type" is not a recognized keyword')}
-    if (length(value)!=length(x)) {stop('coordinates and "value" have different lengths')}}
+  if(!is.null(size.var)) {
+    if (!is.numeric(size.var)) {stop('"size.var" is nof of a valid class')}
+    if (length(size.var)!=length(x)) {stop('coordinates and "size.var" have different lengths')}}
+  if (!is.null(fill.var)) {
+    if (is.null(var.type)) {stop('"fill.var" is set. Please specify "var.type"')}
+    if (!var.type%in%c('cont', 'cat')) {stop('"var.type" is not a recognized keyword')}
+    if (length(fill.var)!=length(x)) {stop('coordinates and "fill.var" have different lengths')}}
 
   # abort function if no variable is provided
-  if (is.null(o.time) & is.null(value)) {
-    warning('neither "o.time" or "value" were specfied. aborted.')
+  if (is.null(size.var) & is.null(fill.var)) {
+    warning('neither "size.var" or "fill.var" were specfied. aborted.')
     return()
   }
 
@@ -72,8 +69,8 @@ plotMove <- function(x=x, y=y, o.time=NULL, value=NULL, type=NULL) {
 #----------------------------------------------------------------------------------------------------------#
 
   # time breaks
-  if (!is.null(o.time)) {
-    mv <- round(max(o.time, na.rm=T))
+  if (!is.null(size.var)) {
+    mv <- round(max(size.var, na.rm=T))
     nc <- nchar(as.character(mv))
     m <- as.numeric(paste0(1, paste0(replicate((nc-1), '0'), collapse='')))
     mv <- mv / m
@@ -82,27 +79,27 @@ plotMove <- function(x=x, y=y, o.time=NULL, value=NULL, type=NULL) {
     tb <- seq(0, tb, m)}
 
   # color scheme for value
-  if (!is.null(value)) {cr <- colorRampPalette(c("dodgerblue3", "khaki2", "forestgreen"))}
+  if (!is.null(fill.var)) {cr <- colorRampPalette(c("dodgerblue3", "khaki2", "forestgreen"))}
 
 #----------------------------------------------------------------------------------------------------------#
 # 3. Build plots
 #----------------------------------------------------------------------------------------------------------#
 
   # time and environmental data
-  if (!is.null(o.time) & !is.null(value)) {
+  if (!is.null(size.var) & !is.null(fill.var)) {
 
     # build data frame
-    df <- data.frame(x=x, y=y, time=o.time, value=value)
+    df <- data.frame(x=x, y=y, time=size.var, value=fill.var)
 
     # build plot
-    if (type=="cont") {
+    if (var.type=="cont") {
       p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", size="time", fill="value"), color="black", pch=21) +
         guides(col=guide_legend(override.aes = list(shape=15, size=6))) +
         theme(legend.text=element_text(size=10), panel.grid.major=element_blank(),
               panel.grid.minor=element_blank()) +
         scale_size_continuous(name="Elapsed Time", breaks=tb, range=c(2,12)) +
         scale_fill_gradientn(name="Value", colours=cr(10))}
-    if (type=="cat") {
+    if (var.type=="cat") {
       df$value <- factor(df$value)
       p <- ggplot(df, aes_string(x="x", y="y", color="value", size="time")) + theme_bw() + geom_point() +
         guides(col=guide_legend(override.aes=list(shape=15, size=6))) +
@@ -116,13 +113,13 @@ plotMove <- function(x=x, y=y, o.time=NULL, value=NULL, type=NULL) {
 #----------------------------------------------------------------------------------------------------------#
 
   # only time
-  if (!is.null(o.time) & is.null(value)) {
+  if (!is.null(size.var) & is.null(fill.var)) {
 
     # build data frame
-    df <- data.frame(x=x, y=y, time=o.time)
+    df <- data.frame(x=x, y=y, time=size.var)
 
     # build plot
-    p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", size="time", fill="red"), color="black", pch=21) +
+    p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", size="time"), color="black", pch=21) +
       guides(fill=FALSE, col=guide_legend(override.aes = list(shape=15, size=6))) +
       theme(legend.text=element_text(size=10), panel.grid.major=element_blank(),
             panel.grid.minor=element_blank()) +
@@ -132,20 +129,20 @@ plotMove <- function(x=x, y=y, o.time=NULL, value=NULL, type=NULL) {
 #----------------------------------------------------------------------------------------------------------#
 
   # only environmental data
-  if (is.null(o.time) & !is.null(value)) {
+  if (is.null(size.var) & !is.null(fill.var)) {
 
     # build data frame
-    df <- data.frame(x=x, y=y, value=value)
+    df <- data.frame(x=x, y=y, value=fill.var)
 
     # build plot
-    if (type=="cont") {
+    if (var.type=="cont") {
       p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", color="value"), color="black", pch=21) +
         guides(col=guide_legend(override.aes = list(shape=15, size=6))) +
         theme(legend.text=element_text(size=10), panel.grid.major=element_blank(),
               panel.grid.minor=element_blank()) +
         scale_size_continuous(name="Elapsed Time", breaks=tb, range=c(2,12)) +
         scale_fill_gradientn(name="Value", colours=cr(10))}
-    if (type=="cat") {
+    if (var.type=="cat") {
       df$value <- factor(df$value)
       p <- ggplot(df, aes_string(x="x", y="y", color="value")) + theme_bw() + geom_point() +
         guides(col=guide_legend(override.aes = list(shape=15, size=6))) +

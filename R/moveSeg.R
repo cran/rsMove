@@ -1,64 +1,60 @@
 #' @title moveSeg
 #'
-#' @description Remote sensing based point segmentation
+#' @description Pixel based segmentation of movement data using environmental data.
 #' @param xy Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.
-#' @param edata Object of class \emph{RasterLayer} or \emph{data.frame}.
-#' @param type Raster data type. One of \emph{cont} (continues) or \emph{cat} (for categorical).
-#' @param ot Object of class \emph{Date}, \emph{POSIXlt} or \emph{POSIXct} with \emph{xy} observation dates.
-#' @param threshold Change threshold.
-#' @param b.size Buffer size expressed in the map units.
-#' @param s.fun Output summary function. Default is mean.
+#' @param env.data Object of class \emph{RasterLayer} or \emph{data.frame}.
+#' @param data.type Raster data data.type. One of \emph{cont} (continuous) or \emph{cat} (for categorical).
+#' @param obs.time Object of class \emph{Date}, \emph{POSIXlt} or \emph{POSIXct} with \emph{xy} observation dates.
+#' @param threshold Change threshold. Required if \emph{data.type} is set to \emph{cat}.
+#' @param summary.fun Summary function used to summarize the values within each segment when \emph{method} is \emph{cont}. Default is mean.
+#' @param buffer.size Spatial buffer size applied around each segment (unit depends on spatial projection).
+#' @param smooth.fun Smoothing function applied with \emph{buffer.size} when \emph{method} is \emph{cont}. Default is mean.
+#' @importFrom raster extract crs
+#' @importFrom ggplot2 ggplot xlab ylab theme geom_bar scale_fill_discrete
 #' @import raster rgdal ggplot2
-#' @seealso \code{\link{dataQuery}} \code{\link{imgInt}}
+#' @seealso \code{\link{dataQuery}} \code{\link{imgInt}} \code{\link{timeDir}} \code{\link{spaceDir}}
 #' @return A \emph{list}.
-#' @details {Segmentation of a point shapefile based on the spatial variability
-#' of a raster dataset. When the \emph{method} is set to \emph{'cont'}, the raster
-#' data is assumed to be continuous. Then, the function determines the percentual
-#' change between each pair of two consecutive coordinate pairs. If this change is
-#' above a predifined \emph{threshold}, a new pointer is added and the previous
-#' sequence of samples is labeled as a unique segment. If \emph{method} is set as
-#' \emph{'cat'}, the function assumes the raster data is categorical ignoring the
-#' \emph{theshold} and \emph{s.fun} keywords. In this case, a new segment is identified
-#' if the any change is observed between two consecutife points. The output consists of
-#' a list containing a \emph{SpatialPointsDataFrame} (\emph{$points}) reporting on the
-#' segment ID (\emph{sid}) associated to each sample and a data frame (\emph{$report})
-#' with the amount of points in each region and the value returned by \emph{s.fun}. If
-#' \emph{ot} is provided, the function also provides the elapsed time within each segment.
-#' If \emph{fun} is set by the user, the provided function will be used to summarize the
-#' raster values at each segment. Also, if \emph{edata} is a \emph{RasterStack} or a
-#' \emph{RasterBrick}, \emph{r.fun} is used to reduce the multi-layered object to a single
-#' layer. he user can either use a Principal Component Analysis (PCA) analysis by setting
-#' \emph{r.fun} to \emph{pca} or provide a function. If \emph{pca} is selected, the first
-#' Principal Conponent (PC) \emph{threshold} will be set automatically to the standard
-#' deviation of the first PC. This is the default. If \emph{method} is \emph{cat} the
-#' function will assume the data is categorical and wil define segments whenever a change occurres.}
+#' @details {This function identifies segments of comparable environmental conditions along the movement track given by \emph{xy}.
+#' Looking at consecutive data points, the function queries \emph{env.data} and proceeds to identify a new segment if \emph{threshold}
+#' is exceeded. Then, for each segment, the function summarizes \emph{env.data} using \emph{summary.fun} and reports on the amount
+#' of points found within it. Moreover, if \emph{obs.time} is set, the function reports on the start and end timestamps and the elapsed time.
+#' If \emph{method} is set as \emph{'cont'}, the function assumes the raster data is a continuous variable. This will require the user to
+#' define \emph{threshold} which indicates when the difference between consecutive points should be considered a change.
+#' In order to smooth the extracted values the user can specify \emph{buffer.size}. This will prompt the function to summarize the values around
+#' each sample in \emph{xy} using a metric define by\emph{smooth.fun}. However, if \emph{data.type} is set to \emph{cat} \emph{smooth.fun} is ignored.
+#' In this case, the function will report on the majority value within the buffer. The output of this function consists of:
+#'\itemize{
+#'  \item{\emph{indices} - Vector reporting on the segment identifiers associated to each sample in \emph{xy}.}
+#'  \item{\emph{stats} - Statistical information for each segment reporting on the corresponding environmental and temporal information.}
+#'  \item{\emph{plot} - plot of \emph{stats} showing the variability of environmental conditions and time spent per segment.}}}
 #' @examples {
 #'
 #'  require(raster)
 #'
 #'  # read raster data
-#'  r <- raster(system.file('extdata', 'tcb_1.tif', package="rsMove"))
+#'  r <- raster(system.file('extdata', 'landCover.tif', package="rsMove"))
 #'
 #'  # read movement data
-#'  moveData <- read.csv(system.file('extdata', 'konstanz_20130804.csv', package="rsMove"))
-#'  moveData <- SpatialPointsDataFrame(moveData[,1:2], moveData, proj4string=crs(r))
+#'  data(shortMove)
 #'
 #'  # observation time
-#'  o.time <- strptime(paste0(moveData@data$date, ' ', moveData@data$time), format="%Y/%m/%d %H:%M:%S")
+#'  obs.time <- strptime(paste0(shortMove@data$date, ' ', shortMove@data$time),
+#'  format="%Y/%m/%d %H:%M:%S")
 #'
 #'  # perform directional sampling
-#'  seg <- moveSeg(xy=moveData, ot=o.time, edata=r, type="cont", threshold=0.1)
+#'  seg <- moveSeg(xy=shortMove, obs.time=obs.time, env.data=r, data.type="cat")
 #'
 #' }
 #' @export
 
 #---------------------------------------------------------------------------------------------------------------------#
 
-moveSeg <- function(xy=xy, edata=edata, type='cont', ot=NULL, b.size=NULL, threshold=NULL, s.fun=NULL) {
+moveSeg <- function(xy=xy, env.data=env.data, data.type='cont', threshold=threshold,
+                    obs.time=NULL, summary.fun=NULL, buffer.size=NULL, smooth.fun=NULL) {
 
-#---------------------------------------------------------------------------------------------------------------------#
-# 1. check input variables
-#---------------------------------------------------------------------------------------------------------------------#
+  #---------------------------------------------------------------------------------------------------------------------#
+  # 1. check input variables
+  #---------------------------------------------------------------------------------------------------------------------#
 
   # samples
   if (!exists('xy')) {stop('"xy" is missing')}
@@ -66,62 +62,67 @@ moveSeg <- function(xy=xy, edata=edata, type='cont', ot=NULL, b.size=NULL, thres
   rProj <- crs(xy) # output projection
 
   # sample dates
-  if (!is.null(ot)) {
-    if (!class(ot)[1]%in%c('Date', 'POSIXct', 'POSIXlt')) {stop('"ot" is nof of a valid class')}
-    if (length(ot)!=length(xy)) {stop('errorr: "xy" and "ot" have different lengths')}}
+  if (!is.null(obs.time)) {
+    if (!class(obs.time)[1]%in%c('Date', 'POSIXct', 'POSIXlt')) {stop('"obs.time" is nof of a valid class')}
+    if (length(obs.time)!=length(xy)) {stop('errorr: "xy" and "obs.time" have different lengths')}
+    processTime <- TRUE
+  } else {processTime <- FALSE}
 
   # environmental data
-  if (class(edata)[1]=='RasterLayer') {
-    if (crs(xy)@projargs!=crs(edata)@projargs) {stop('"xy" and "edata" have different projections')}
+  if (class(env.data)[1]=='RasterLayer') {
+    if (crs(xy)@projargs!=crs(env.data)@projargs) {stop('"xy" and "env.data" have different projections')}
     prd <- TRUE
-    } else {
-      if (!class(edata)[1]%in%c('data.frame')) {stop('"edata" is neither a raster or a data frame')}
-      if (nrow(edata)!=length(xy)) {stop('number of elements in "xy" and "edata" do not match')}
-      prd=FALSE}
+  } else {
+    if (!class(env.data)[1]%in%c('data.frame')) {stop('"env.data" is neither a raster or a data frame')}
+    if (nrow(env.data)!=length(xy)) {stop('number of elements in "xy" and "env.data" do not match')}
+    prd=FALSE}
 
   # check threshold
-  if (type=='cont') {
-    if (is.null(threshold)) {stop('"type" is set to "cont". Please define "threshold"')}
+  if (data.type=='cont') {
+    if (is.null(threshold)) {stop('"data.type" is set to "cont". Please define "threshold"')}
     if (!is.numeric(threshold)) {stop('"threshold" is not numeric')}}
-  if (type=='cat') {threshold <- 1}
+  if (data.type=='cat') {threshold <- 1}
 
-  # check query type
-  if (!type%in%c('cont', 'cat')) {stop('"type" is not  avalid keyword')}
-  if (type=='cont') {
-    if (!is.null(s.fun)) {if (!is.function(s.fun)){stop('"s.fun" is not a valid keyword or function')}}
-    if (is.null(s.fun)) {s.fun <- function(x) {return(mean(x, na.rm=T))}}}
+  # check query data.type
+  if (!data.type%in%c('cont', 'cat')) {stop('"data.type" is not  avalid keyword')}
+  if (data.type=='cont') {
+    if (!is.null(smooth.fun)) {if (!is.function(smooth.fun)){stop('"smooth.fun" is not a valid keyword or function')}}
+    if (is.null(smooth.fun)) {smooth.fun <- function(x) {return(mean(x, na.rm=T))}}
+    if (!is.null(summary.fun)) {if (!is.function(smooth.fun)){stop('"summary.fun" is not a valid keyword or function')}}
+    if (is.null(summary.fun)) {summary.fun <- function(x) {return(mean(x, na.rm=T))}}}
+  if (data.type=='cat') {summary.fun <- function(x) {return(mean(x, na.rm=T))}}
 
-#---------------------------------------------------------------------------------------------------------------------#
-# 2. query data
-#---------------------------------------------------------------------------------------------------------------------#
+  #---------------------------------------------------------------------------------------------------------------------#
+  # 2. query data
+  #---------------------------------------------------------------------------------------------------------------------#
 
   if (prd) {
 
     # apply buffer if required
-    if (!is.null(b.size)) {
+    if (!is.null(buffer.size)) {
 
       # average samples within buffer
-      if (type=='cont') {edata <- extract(edata, xy@coords, buffer=b.size, fun=s.fun, na.rm=T)}
+      if (data.type=='cont') {env.data <- extract(env.data, xy@coords, buffer=buffer.size, fun=smooth.fun, na.rm=T)}
 
       # determine main class within the buffer
-      if (type=='cat') {
+      if (data.type=='cat') {
 
         # dilate samples
         tmp <- lapply(1:length(xy), function(x) {
-          ind <- raster(extent((xy@coords[x,1]-b.size), (xy@coords[x,1]+b.size),
-                              (xy@coords[x,2]-b.size), (xy@coords[x,2]+b.size)), crs=rProj)
+          ind <- raster(extent((xy@coords[x,1]-buffer.size), (xy@coords[x,1]+buffer.size),
+                               (xy@coords[x,2]-buffer.size), (xy@coords[x,2]+buffer.size)), crs=rProj)
           ind <- xyFromCell(ind, 1:ncell(ind))
           return(list(c=ind, s=replicate(nrow(ind), x)))})
         si <- unlist(lapply(tmp, function(x) {x$s}))
         tmp <- do.call(rbind, lapply(tmp, function(x) {x$c}))
 
         # extract values
-        edata0 <- extract(edata, tmp)
+        edata0 <- extract(env.data, tmp)
 
         # sumarize data (extract dominant class)
-        edata <- sapply(1:length(xy), function(x) {
+        env.data <- sapply(1:length(xy), function(x) {
           ind <- which(si==x)
-          r0 <- as.vector(edata0[ind[!duplicated(cellFromXY(edata, tmp[ind,1:2]))]])
+          r0 <- as.vector(edata0[ind[!duplicated(cellFromXY(env.data, tmp[ind,1:2]))]])
           uc <- unique(r0)
           uc <- uc[!is.na(uc)]
           if (length(uc)>0) {
@@ -129,16 +130,16 @@ moveSeg <- function(xy=xy, edata=edata, type='cont', ot=NULL, b.size=NULL, thres
             return(uc[which(count==max(count))[1]])
           } else {return(NA)}})
 
-          rm(tmp, si)
+        rm(tmp, si, edata0)
 
       }
 
       # simple query
-    } else {edata <- extract(edata, xy@coords)}}
+    } else {env.data <- extract(env.data, xy@coords)}}
 
-#---------------------------------------------------------------------------------------------------------------------#
-# 3. identify segments
-#---------------------------------------------------------------------------------------------------------------------#
+  #---------------------------------------------------------------------------------------------------------------------#
+  # 3. identify segments
+  #---------------------------------------------------------------------------------------------------------------------#
 
   # search for segments
   r0 <- 1
@@ -147,55 +148,53 @@ moveSeg <- function(xy=xy, edata=edata, type='cont', ot=NULL, b.size=NULL, thres
   rv <- list() # segment value
 
   for (r in 2:length(xy)) {
-    diff <- abs(edata[r]-edata[(r-1)])
+    diff <- abs(env.data[r]-env.data[(r-1)])
     if (!is.na(diff)) {
       if (diff >= threshold) {
         ep <- r-1
-        rv[[li]] <- mean(edata[c(r0:ep)])
+        rv[[li]] <- summary.fun(env.data[c(r0:ep)])
         id[[li]] <- replicate(length(c(r0:ep)), li)
         r0 <- r
         li <- li + 1
         if (r==length(xy)) {
           id[[li]] <- li
-          rv[[li]] <- edata[r]}
+          rv[[li]] <- env.data[r]}
       } else {if (r==length(xy)) {
         ep <- r
-        rv[[li]] <- mean(edata[c(r0:ep)])
+        rv[[li]] <- summary.fun(env.data[c(r0:ep)])
         id[[li]] <- replicate(length(c(r0:ep)), li)}}}}
   rv <- unlist(rv)
   id <- unlist(id)
 
-#---------------------------------------------------------------------------------------------------------------------#
-# 4. derive statistics
-#---------------------------------------------------------------------------------------------------------------------#
-
-  # update original shapefile
-  p.shp <- SpatialPointsDataFrame(xy@coords, data.frame(sid=id), proj4string=rProj)
+  #---------------------------------------------------------------------------------------------------------------------#
+  # 4. derive segment statistics
+  #---------------------------------------------------------------------------------------------------------------------#
 
   # build region report
   uid <- sort(unique(id))
-  if (!is.null(ot)) {
-    f <- function(x) {
-      ind <- which(id==x)
-      et <- difftime(ot[ind[length(ind)]], ot[ind[1]], units="mins")
-      np <- length(ind)
-      return(list(time=as.numeric(et), count=np))}
-    sstat <- lapply(uid, f)
-    df <- data.frame(sid=uid, count=sapply(sstat, function(x) {x$count}),
-          time=sapply(sstat, function(x) {x$time}), value=rv)
-  } else {df <- data.frame(sid=uid, count=sapply(uid, function(x){sum(id==x)}))}
+  df <- do.call(rbind, lapply(uid, function(x) {
+    ind <- which(id==x)
+    if (processTime) {
+      tt <- difftime(obs.time[ind[length(ind)]], obs.time[ind[1]], units="mins")
+      st <- min(obs.time[ind])
+      et <- max(obs.time[ind])
+    } else {
+      tt <- NA
+      st <- NA
+      et <- NA}
+    return(data.frame(sid=x, count=length(ind), start=st, end=et,
+                      elapsed=as.numeric(tt), value=rv[x], stringsAsFactors=FALSE))}))
 
+  #---------------------------------------------------------------------------------------------------------------------#
+  # 5. build plot
+  #---------------------------------------------------------------------------------------------------------------------#
 
-#---------------------------------------------------------------------------------------------------------------------#
-# 5. build plot
-#---------------------------------------------------------------------------------------------------------------------#
+  if (data.type=='cont') {
 
-  if (type=='cont') {
-
-    df$sid <- factor(df$sid, levels=unique(df$sid))
+    df$sid <- factor(df$sid, levels=sort(unique(df$sid)))
 
     # plot with time
-    if (!is.null(ot)) {
+    if (!is.null(obs.time)) {
 
       # buid plot object
       p <- ggplot(df, aes_string(x="sid", y="time", fill="value")) + geom_bar(stat="identity") +
@@ -215,38 +214,39 @@ moveSeg <- function(xy=xy, edata=edata, type='cont', ot=NULL, b.size=NULL, thres
       if (mv > yr) {yr <- (yr+0.2)*m} else {yr <- yr*m}
 
       # buid plot object
-      p <- ggplot(df, aes_string(x="sid", y="time", fill="count")) + geom_bar(stat="identity") +
-        xlab('') + ylab('Segment length') +
-        theme(axis.ticks.x=element_blank(), axis.text.x=element_blank(), axis.text=element_text(size=12),
+      p <- ggplot(df, aes_string(x="sid", y="count", fill="value")) + geom_bar(stat="identity") +
+        xlab('\nSegment ID') + ylab('Sample count\n') +
+        theme(axis.text.x=element_text(size=10, hjust=1), axis.text=element_text(size=12),
               axis.title=element_text(size=14), legend.title=element_text(size=14), legend.text=element_text(size=12))}}
 
-  if (type=='cat') {
+  if (data.type=='cat') {
 
-    df$sid <- factor(df$sid, levels=unique(df$sid))
-    df$value <- factor(df$value, levels=unique(df$value))
+    df$sid <- factor(df$sid, levels=sort(unique(df$sid)))
+    df$value <- factor(df$value, levels=sort(unique(df$value)))
 
     # plot with time
-    if (!is.null(ot)) {
+    if (!is.null(obs.time)) {
 
       # buid plot object
-      p <- ggplot(df, aes_string(x="sid", y="time", fill="value")) + geom_bar(stat="identity") +
-        xlab('') + ylab('Time Spent (minutes)') + scale_fill_discrete(name="Class") +
-        theme(axis.ticks.x=element_blank(), axis.text.x=element_blank(), axis.text=element_text(size=12),
+      p <- ggplot(df, aes_string(x="sid", y="elapsed", fill="value")) + geom_bar(stat="identity") +
+        xlab('\nSegment ID') + ylab('Time Spent (minutes)\n') + scale_fill_discrete(name="Class") +
+        theme(axis.text.x=element_text(size=10, hjust=1), axis.text=element_text(size=12),
               axis.title=element_text(size=14), legend.title=element_text(size=14), legend.text=element_text(size=12))
 
-    # plot without time
+      # plot without time
     } else {
 
       # buid plot object
-      p <- ggplot(df, aes_string(x="sid", y="time", fill="count")) + geom_bar(stat="identity") +
-        xlab('') + ylab('Segment length') + scale_fill_discrete(name="Class") +
-        theme(axis.ticks.x=element_blank(), axis.text.x=element_blank(), axis.text=element_text(size=12),
+      p <- ggplot(df, aes_string(x="sid", y="count", fill="value")) + geom_bar(stat="identity") +
+        xlab('\nSegment ID') + ylab('Sample count\n') + scale_fill_discrete(name="Class") +
+        theme(axis.ticks.x=element_blank(), axis.text.x=element_text(size=10, hjust=1), axis.text=element_text(size=12),
               axis.title=element_text(size=14), legend.title=element_text(size=14), legend.text=element_text(size=12))}}
 
-#---------------------------------------------------------------------------------------------------------------------#
-# 6. return output
-#---------------------------------------------------------------------------------------------------------------------#
+  #---------------------------------------------------------------------------------------------------------------------#
+  # 6. return output
+  #---------------------------------------------------------------------------------------------------------------------#
 
-  return(list(points=p.shp, report=df, plot=p))
+  colnames(df) <- c("Segment ID", "Nr. Samples", "Timestamp (start)", "Timestamp (end)", "Total time (minutes)", "Value")
+  return(list(indices=id, stats=df, plot=p))
 
 }

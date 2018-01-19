@@ -1,59 +1,60 @@
 #' @title segRaster
 #'
-#' @description Connencte-region based raster segmentation.
-#' @param prob Object of class \emph{RasterLayer}.
-#' @param pt Difference threshold. Default is 0.05.
-#' @param mp Minimum value. Default is 0.5.
-#' @import raster rgdal
+#' @description {Connected-region based raster segmentation that preserves spatial gradients.}
+#' @param img Object of class \emph{RasterLayer}.
+#' @param break.point Difference threshold. Default is 0.05.
+#' @param min.value Minimum value. Default is 0.5.
+#' @importFrom raster raster extent crs res
 #' @importFrom stats sd
 #' @return A list object.
-#' @details {The function segments an input layer using a connected 
-#' component region labeling approach. For each pixel, the function 
-#' estimates the difference between it and its imediate 8 neighbors. 
-#' The pixels where the difference is below the defined threshold 
-#' (\emph{ct}) are aggregated into a single region. The user can define 
-#' a minimum pixel value using \emph{mp} which will limit the range of 
-#' pixels under evaluation. The result contains a raster with unique 
-#' values for each segment region region (\emph{$segment}) as well as a 
-#' data frame (\emph{$stats}) with statistics for each region. The data 
-#' frame report on the minimum (\emph{min}), maximum (\emph{max}), mean (\emph{mean}) 
-#' and standard deviation (\emph{sd}) of the pixels contained in each region.}
-#' @seealso \code{\link{moveModel}} \code{\link{modelApply}}
+#' @details {The function segments an input raster layer (\emph{img}) using a
+#' connected component region labeling approach. For each pixel, the function
+#' estimates the difference between it and its immediate neighbors. If the
+#' difference is below the threshold defined by \emph{break.point} these are
+#' aggregated into a single region. Moreover, the user can define a minimum pixel
+#' value using \emph{min.value} which will ignore all pixels below that value. The
+#' output of this function consists of:
+#' \itemize{
+#'  \item{\emph{regions} - Region raster image.}
+#'  \item{\emph{stats} - Basic statistics for each pixel region.}}}
+#' @seealso \code{\link{predictResources}}
 #' @examples {
-#'  
+#'
 #'  require(raster)
-#'  
+#'
 #'  # load example probability image
 #'  file <- system.file('extdata', 'konstanz_probabilities.tif', package="rsMove")
-#'  probImg <- raster(file)
-#'  
+#'  r <- raster(file)
+#'
 #'  # segment probabilities
-#'  rs <- segRaster(probImg)
-#'  
+#'  rs <- segRaster(r)
+#'
 #' }
 #' @export
 
 #-----------------------------------------------------------------------------------#
 
-segRaster <- function(prob, pt=0.1, mp=0.5) {
-  
-#-----------------------------------------------------------------------------------#
-# 1. check input variables
-#-----------------------------------------------------------------------------------#
-  
-  if (class(prob)[1]!='RasterLayer') {stop('"prob" is not a "RasterLayer"')}
+segRaster <- function(img, break.point=0.1, min.value=0.5) {
 
-#-----------------------------------------------------------------------------------#
-# 2. segment regions
-#-----------------------------------------------------------------------------------#
-  
-  nr <- dim(prob)[1]
-  nc <- dim(prob)[2] 
+  #-----------------------------------------------------------------------------------#
+  # 1. check input variables
+  #-----------------------------------------------------------------------------------#
+
+  if (class(img)[1]!='RasterLayer') {stop('"img" is not a "RasterLayer"')}
+  if (is.null(min.value)) {min.value <- 0}
+
+  #-----------------------------------------------------------------------------------#
+  # 2. segment regions
+  #-----------------------------------------------------------------------------------#
+
+  # raster dimensions
+  nr <- dim(img)[1]
+  nc <- dim(img)[2]
 
   # identify usable pixels
-  data <- as.matrix(prob)
-  pos <- which(data > mp)
-  
+  data <- as.matrix(img)
+  pos <- which(data >= min.value)
+
   # evaluate pixel connectivity
   regions <- matrix(0, nr, nc)
   for (r in 1:length(pos)) {
@@ -64,8 +65,9 @@ segRaster <- function(prob, pt=0.1, mp=0.5) {
     if (rp > 1) {sr<-rp-1} else {sr<-rp}
     if (rp < nr) {er<-rp+1} else {er<-rp}
     if (max(regions[sr:er,sc:ec])>0) {
-      diff <- abs(data[sr:er,sc:ec]-data[rp,cp]) <= pt
-      uv <- unique(c(regions[sr:er,sc:ec]*diff))
+      diff <- abs(data[sr:er,sc:ec]-data[rp,cp]) <= break.point &
+        is.finite(data[sr:er,sc:ec])
+      uv <- unique(c(regions[sr:er,sc:ec][diff]))
       uv <- uv[which(uv>0)]
       if (length(uv>0)) {
         mv <- min(uv)
@@ -74,13 +76,13 @@ segRaster <- function(prob, pt=0.1, mp=0.5) {
       } else {regions[rp,cp]<-max(regions)+1}
     } else {regions[rp,cp] <- max(regions)+1}
   }
-  
-#-----------------------------------------------------------------------------------#
-# 3. derive segment statistics
-#-----------------------------------------------------------------------------------#
-    
+
+  #-----------------------------------------------------------------------------------#
+  # 3. derive segment statistics
+  #-----------------------------------------------------------------------------------#
+
   # update region id
-  uv = sort(unique(regions[which(regions>0)]))
+  uv <- sort(unique(regions[which(regions>0)]))
   uregions = regions
   nr <- length(uv)
   pmn <- vector('numeric', nr) # min
@@ -97,23 +99,23 @@ segRaster <- function(prob, pt=0.1, mp=0.5) {
     psd[u] <- sd(data[pos], na.rm=T)
     npx[u] <- sum(!is.na(data[pos]))
   }
-  
+
   rm(regions, data)
-  
-#-----------------------------------------------------------------------------------#
-# 4. return output
-#-----------------------------------------------------------------------------------#
-  
+
+  #-----------------------------------------------------------------------------------#
+  # 4. return output
+  #-----------------------------------------------------------------------------------#
+
   # convert data back to raster
-  uregions = raster(uregions)
-  extent(uregions) <- extent(prob)
-  res(uregions) <- res(prob)
-  crs(uregions) <- crs(prob)
-  
+  uregions <- raster(uregions)
+  extent(uregions) <- extent(img)
+  res(uregions) <- res(img)
+  crs(uregions) <- crs(img)
+
   # build/return data frame
-  df <- data.frame(segment=uv, min=pmn, max=pmx, mean=pav, sd=psd, cout=npx)
-  
+  df <- data.frame(segment=uv, min=pmn, max=pmx, mean=pav, sd=psd, count=npx)
+
   # return matrix/df
-  return(list(segment=uregions, stats=df))
+  return(list(regions=uregions, stats=df))
 
 }
