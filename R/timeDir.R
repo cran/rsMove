@@ -3,7 +3,6 @@
 #' @description Analysis of environmental change in time for a set of coordinate pairs.
 #' @param xy Object of class "SpatialPoints" or "SpatialPointsDataFrame".
 #' @param obs.dates Object of class \emph{Date} with \emph{xy} observation dates.
-#' @param img Object of class
 #' @param env.data Object of class \emph{RasterStack} or \emph{RasterBrick} or \emph{data.frame}.
 #' @param env.dates Object of class \emph{Date} with \emph{env.data} observation dates.
 #' @param temporal.buffer two element vector with temporal window size (expressed in days).
@@ -12,7 +11,7 @@
 #' @importFrom raster crs extract
 #' @importFrom stats lm
 #' @importFrom grDevices colorRampPalette
-#' @importFrom ggplot2 ggplot geom_point theme guides scale_fill_gradientn scale_size_continuous ylab xlab
+#' @importFrom ggplot2 ggplot geom_point theme guides scale_fill_gradientn scale_size_continuous ylab xlab element_text element_blank
 #' @seealso \code{\link{spaceDir}} \code{\link{dataQuery}} \code{\link{imgInt}}
 #' @return A \emph{vector} with a requested statistical metric for each point in \emph{xy}.
 #' @details {This function evaluates how environmental conditions change in time along a movement track.
@@ -46,15 +45,14 @@
 #'
 #'  # perform directional sampling
 #'  of <- function(x,y) {lm(y~x)$coefficients[2]}
-#'  time.env <- timeDir(xy=shortMove, obs.dates=obs.dates, env.data=r.stk,
-#'  env.dates=r.dates, temporal.buffer=c(30,30), stat.fun=of)
+#'  time.env <- timeDir(r.stk, r.dates, obs.dates, c(30,30), xy=shortMove, stat.fun=of)
 #'
 #' }
 #' @export
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 
-timeDir <- function(xy=NULL, obs.dates=obs.dates, img=NULL, env.data=NULL, env.dates=env.dates, temporal.buffer=temporal.buffer, stat.fun=NULL, min.count=2) {
+timeDir <- function(env.data, env.dates, obs.dates, temporal.buffer, xy=NULL, stat.fun=NULL, min.count=2) {
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 # 1. check variables

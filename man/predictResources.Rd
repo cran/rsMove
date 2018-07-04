@@ -4,17 +4,16 @@
 \alias{predictResources}
 \title{predictResources}
 \usage{
-predictResources(presence.data = presence.data, absence.data = absence.data,
-  sample.label = NULL, env.data = NULL)
+predictResources(x, y, z, env.data = NULL)
 }
 \arguments{
-\item{presence.data}{Object of class \emph{data.frame} with environmental variables for presence samples.}
+\item{x}{Object of class \emph{data.frame} with environmental variables for presence samples.}
 
-\item{absence.data}{Object of class \emph{data.frame} with environmental variables for background samples.}
+\item{y}{Object of class \emph{data.frame} with environmental variables for background samples.}
 
-\item{sample.label}{Numeric or character vector with sample region labels. If missing, "presence.data" is assumed as one region.}
+\item{z}{Numeric or character vector with sample region labels. If missing, "x" is assumed as one region.}
 
-\item{env.data}{Object of class \emph{RasterStack} or \emph{RasterBrick} with environmental variables in \emph{presence.data} and \emph{absence.data}.}
+\item{env.data}{Object of class \emph{RasterStack} or \emph{RasterBrick} with environmental variables in \emph{x} and \emph{y}.}
 }
 \value{
 A \emph{list}.
@@ -24,14 +23,14 @@ Spatially stratified predictive modeling of resource suitability based on presen
 }
 \details{
 {Modeling of resource suitability using animal movement data following a recent paper (Remelgado et al, 2017). For each
-unique label in \emph{sample.label}, the function keeps it for validation and uses the remaining samples for training. Then, the
+unique label in \emph{z}, the function keeps it for validation and uses the remaining samples for training. Then, the
 function evaluates the performance of this model reporting (internally) on the number of true positives, false positives and the
 number of validation and predicted cases for both presences and absences. Once all sample regions are used for validation, the
 reported values are summed and used to derive the F1-measure. The F1-measure is estimated as \emph{2 * (P * R) / (P + R)} where
 \emph{P} is the Precision (ratio of true positives within the number of predicted values) and \emph{R} is the Recall (ratio of
 true positives within the number of validation samples). As a consequence, rather than reporting on an average performance, the
 final performance assessment reported by \emph{predictResources} depicts an objective picture on how the model performed among the
-different sets sample regions. This metric is provided for presences (\emph{presence.data}) and absences ({\emph{absence.data}})
+different sets sample regions. This metric is provided for presences (\emph{x}) and absences ({\emph{y}})
 separately offering an overview on the stability of the model. This analysis is performed using a Random Forest model as provided
 within the \code{\link[caret]{train}} function of the caret package. The final predictive model is then derived with all samples.
 The output of \emph{predictResources} is a list object consisting of:
@@ -61,22 +60,19 @@ The output of \emph{predictResources} is a list object consisting of:
  format="\%Y/\%m/\%d \%H:\%M:\%S")
 
  # remove redundant samples
- shortMove <- moveReduce(xy=shortMove, obs.time=obs.time, img=rsStk)$points
+ shortMove <- moveReduce(shortMove, obs.time, r.stk)$points
 
  # retrieve remote sensing data for samples
- rsQuery <- extract(rsStk, shortMove)
+ rsQuery <- extract(r.stk, shortMove)
 
  # identify unique sample regions
- label <- labelSample(xy=shortMove, agg.radius=90, pixel.res=rsStk)
+ label <- labelSample(shortMove, r.stk, agg.radius=30)
 
  # select background samples
- ind <- which(!is.na(label)) # selected samples
- bSamples <- backSample(xy=shortMove[ind,], region.id=label[ind],
- img=rsStk, sampling.method='pca')
+ bSamples <- backSample(shortMove, r.stk, label, sampling.method='pca')
 
  # derive model predictions
- out <- predictResources(presence.data=rsQuery,
- absence.data=bSamples@data, sample.label=label, env.data=rsStk)
+ out <- predictResources(rsQuery, bSamples@data, label, env.data=r.stk)
 
 }
 }

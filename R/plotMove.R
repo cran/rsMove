@@ -6,7 +6,8 @@
 #' @param size.var Optional. Vector with elapsed time as report by \code{\link{moveReduce}}, \code{\link{sampleMove}} or \code{\link{timeDir}}. Controls the point size.
 #' @param fill.var Optional. Vector with environmental information. Controls the fill color.
 #' @param var.type One of 'cont' or 'cat'. Defines the type of \emph{fill.var}.
-#' @importFrom ggplot2 ggplot aes_string theme geom_bar scale_fill_gradientn xlab ylab theme_bw geom_point guides scale_size_continuous scale_color_discrete scale_fill_gradientn scale_size_continuous
+#' @importFrom ggplot2 ggplot aes_string theme geom_bar scale_fill_gradientn xlab ylab theme_bw geom_point guides
+#' scale_size_continuous scale_color_discrete scale_fill_gradientn scale_size_continuous guide_legend element_text element_blank
 #' @importFrom grDevices colorRampPalette
 #' @seealso \code{\link{dataQuery}} \code{\link{moveReduce}}
 #' @return A \emph{ggplot} object.
@@ -27,7 +28,7 @@
 #'  time <- strptime(paste0(shortMove@data$date, ' ', shortMove@data$time), format="%Y/%m/%d %H:%M:%S")
 #'
 #'  # reduce amount of samples
-#'  move.reduce <- moveReduce(xy=shortMove, obs.time=time, img=r)
+#'  move.reduce <- moveReduce(shortMove, r, time)
 #'
 #'  # query data
 #'  ov <- extract(r, move.reduce$points)
@@ -36,14 +37,14 @@
 #'  x <- move.reduce$points@data$x
 #'  y <- move.reduce$points@data$y
 #'  et <- move.reduce$points@data$`Elapsed time (minutes)`
-#'  op <- plotMove(x=x, y=y, size.var=et, fill.var=ov, var.type="cont")
+#'  op <- plotMove(x, y, size.var=et, fill.var=ov, var.type="cont")
 #'
 #' }
 #' @export
 
 #----------------------------------------------------------------------------------------------------------#
 
-plotMove <- function(x=x, y=y, size.var=NULL, fill.var=NULL, var.type=NULL) {
+plotMove <- function(x, y, size.var=NULL, fill.var=NULL, var.type=NULL) {
 
 #----------------------------------------------------------------------------------------------------------#
 # 1. Check input data

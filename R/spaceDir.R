@@ -13,7 +13,7 @@
 #' @importFrom raster extract
 #' @importFrom stats lm
 #' @importFrom grDevices colorRampPalette
-#' @importFrom ggplot2 aes_string geom_line theme scale_color_gradientn xlab ylab
+#' @importFrom ggplot2 aes_string geom_line theme scale_color_gradientn xlab ylab fortify geom_path element_text element_blank geom_histogram xlim
 #' @seealso \code{\link{timeDir}} \code{\link{dataQuery}} \code{\link{imgInt}}
 #' @return A \emph{list} containing shapefiles with information on environmental change and travel distance/time and a plot of the results.
 #' @details {This function evaluates how do environmental conditions change in space along a movement track. For
@@ -47,15 +47,14 @@
 #'
 #'  # perform directional sampling
 #'  of <- function(x) {lm(x~c(1:length(x)))$coefficients[2]}
-#'  s.sample <- spaceDir(xy=shortMove, obs.time=obs.time, img=r,
-#'  sample.direction="backward", data.type='cont', stat.fun=of)
+#'  s.sample <- spaceDir(shortMove, r, "backward", "cont", obs.time=obs.time, stat.fun=of)
 #'
 #' }
 #' @export
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 
-spaceDir <- function(xy=xy, obs.time=NULL, img=img, sample.direction=sample.direction, data.type=data.type, distance.method='m', buffer.size=NULL, stat.fun=NULL, min.count=2) {
+spaceDir <- function(xy, img, sample.direction, data.type, obs.time=NULL, distance.method='m', buffer.size=NULL, stat.fun=NULL, min.count=2) {
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 # 1. check variables

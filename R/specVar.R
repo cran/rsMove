@@ -5,7 +5,7 @@
 #' @param img Object of class \emph{RasterLayer}.
 #' @param pixel.res Spatial resolution (unit depends on the spatial projection).
 #' @importFrom raster extent xyFromCell crs aggregate crop disaggregate getValues setValues res extract
-#' @importFrom ggplot2 ggplot aes_string geom_boxplot ylim
+#' @importFrom ggplot2 ggplot aes_string geom_boxplot ylim geom_histogram xlim
 #' @return A \emph{list}.
 #' @details {Given a raster object (\emph{img}), the function determines how degrading its spatial resolution impacts
 #' our ability to perceive the complexity of the landscape. For the pixel resolution given by \emph{pixel.res}, The
@@ -25,14 +25,14 @@
 #'  r <- raster(system.file('extdata', '2013-07-16_ndvi.tif', package="rsMove"))
 #'
 #'  # apply function
-#'  s.var <- specVar(img=r, pixel.res=60)
+#'  s.var <- specVar(r, 60)
 #'
 #' }
 #' @export
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 
-specVar <- function(img=img, pixel.res=pixel.res) {
+specVar <- function(img, pixel.res) {
 
 #---------------------------------------------------------------------------------------------------------------------#
 #  1. check inpur variables

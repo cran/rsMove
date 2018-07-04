@@ -4,10 +4,10 @@
 \alias{segRaster}
 \title{segRaster}
 \usage{
-segRaster(img, break.point = 0.1, min.value = 0.5)
+segRaster(x, break.point = 0.1, min.value = 0.5)
 }
 \arguments{
-\item{img}{Object of class \emph{RasterLayer}.}
+\item{x}{Object of class \emph{RasterLayer}.}
 
 \item{break.point}{Difference threshold. Default is 0.05.}
 
@@ -20,7 +20,7 @@ A list object.
 {Connected-region based raster segmentation that preserves spatial gradients.}
 }
 \details{
-{The function segments an input raster layer (\emph{img}) using a
+{The function segments an input raster layer (\emph{x}) using a
 connected component region labeling approach. For each pixel, the function
 estimates the difference between it and its immediate neighbors. If the
 difference is below the threshold defined by \emph{break.point} these are
@@ -32,12 +32,12 @@ output of this function consists of:
  \item{\emph{stats} - Basic statistics for each pixel region.}}}
 }
 \examples{
-{
+\dontrun{
 
  require(raster)
 
  # load example probability image
- file <- system.file('extdata', 'konstanz_probabilities.tif', package="rsMove")
+ file <- system.file('extdata', 'probabilities.tif', package="rsMove")
  r <- raster(file)
 
  # segment probabilities

@@ -2,7 +2,6 @@
 # load packages
 library(rsMove)
 library(raster)
-library(sp)
 library(ggplot2)
 library(knitr)
 library(kableExtra)
@@ -21,15 +20,14 @@ file.name <- names(ndvi)
 ndvi.dates <- as.Date(paste0(substr(file.name, 2, 5), '-', substr(file.name, 7, 8), '-', substr(file.name, 10, 11)))
 
 ## ----message=FALSE-------------------------------------------------------
-sample.regions <- hotMove(xy=longMove, pixel.res=0.1, return.shp=TRUE)
+sample.regions <- hotMove(longMove, 0.1, return.shp=TRUE)
 
 ## ---- out.width="98%", fig.height=5, fig.width=10, dpi=600, fig.align="center"----
-par(mar=c(4,4,0,4), xpd = NA, font.lab=2)
 plot(longMove@coords[,1], longMove@coords[,2], pch=16, cex=0.5, xlab="Lon", ylab="Lat", cex.lab=1, cex.axis=1)
 plot(sample.regions$polygons, col=rgb(1,0,0,0.3), add=TRUE)
 
 ## ------------------------------------------------------------------------
-region.stats <- hotMoveStats(region.id=sample.regions$indices, obs.time=as.Date(longMove@data$timestamp))
+region.stats <- hotMoveStats(sample.regions$indices, as.Date(longMove@data$timestamp))
 
 ## ---- echo=FALSE, results='asis'-----------------------------------------
 kable_styling(kable(head(region.stats$region.stats, 5), format="html", align="c", full_width=TRUE), "stripped", bootstrap_options="responsive")
@@ -38,7 +36,7 @@ kable_styling(kable(head(region.stats$region.stats, 5), format="html", align="c"
 region.stats$plot
 
 ## ---- out.width="98%", fig.height=5, fig.width=10, dpi=600, fig.align="center", echo=FALSE, message=FALSE----
-df <- data.frame(id=1:21, time=region.stats$region.stats$`Total Time`)
+df <- data.frame(id=region.stats$region.stats$`Region ID`, time=region.stats$region.stats$`Total Time`)
 pol <- fortify(SpatialPolygonsDataFrame(sample.regions$polygons, df))
 pol <- merge(pol, df, by="id")
 ggplot(pol, aes(x=long, y=lat, group=id, fill=time)) + theme_bw() + geom_polygon() + xlab("Long") + ylab("Lat")
@@ -61,7 +59,7 @@ t.res$plot
 plot(ndvi[[2]])
 
 ## ---- warning=FALSE, message=FALSE---------------------------------------
-s.var <- specVar(img=ndvi[[2]], pixel.res=250)
+s.var <- specVar(img=ndvi[[2]], pixel.res=(res(ndvi)[1]*2))
 
 ## ---- out.width="98%", fig.height=5, fig.width=10, dpi=600, fig.align="center", fig.show='hold', echo=FALSE----
 plot(s.var$mape)
@@ -73,7 +71,7 @@ points(shortMove, type="l")
 
 ## ------------------------------------------------------------------------
 obs.time <- strptime(paste0(shortMove@data$date, ' ', shortMove@data$time), format="%Y/%m/%d %H:%M:%S")
-reduced.samples <- moveReduce(xy=shortMove, obs.time=obs.time, img=landCover)
+reduced.samples <- moveReduce(shortMove, landCover, obs.time, derive.raster=TRUE)
 
 ## ---- out.width="98%", fig.height=5, fig.width=10, dpi=600, fig.align="center", echo=FALSE----
 plot(reduced.samples$total.time, ext=shortMove)
@@ -86,16 +84,16 @@ reduced.samples$points$`Elapsed time (minutes)` <- format(reduced.samples$points
 kable_styling(kable(head(reduced.samples$points, 5), format="html", align="c", full_width=TRUE), "stripped", bootstrap_options="responsive")
 
 ## ------------------------------------------------------------------------
-env.query <- dataQuery(xy=reduced.samples$points, obs.dates=as.Date(reduced.samples$points$`Timeststamp (start)`), env.data=ndvi, env.dates=ndvi.dates, time.buffer=c(30,30))
+env.query <- dataQuery(ndvi, reduced.samples$points, ndvi.dates, as.Date(reduced.samples$points$`Timeststamp (start)`), c(30,30))
 
 ## ---- echo=FALSE---------------------------------------------------------
 reduced.samples$points$`Elapsed time (minutes)` <- as.numeric(reduced.samples$points$`Elapsed time (minutes)`)
 
 ## ---- out.width="98%", fig.height=5, fig.width=10, dpi=600, fig.align="center"----
-plotMove(x=reduced.samples$points$x, y=reduced.samples$points$y, size.var=reduced.samples$points$`Elapsed time (minutes)`, fill.var=env.query$value, var.type="cont")
+plotMove(reduced.samples$points$x, reduced.samples$points$y, size.var=reduced.samples$points$`Elapsed time (minutes)`, fill.var=env.query$value, var.type="cont")
 
 ## ------------------------------------------------------------------------
-seg <- moveSeg(xy=shortMove, obs.time=obs.time, env.data=landCover, data.type="cat")
+seg <- moveSeg(landCover, shortMove, obs.time, data.type="cat")
 
 ## ---- echo=FALSE---------------------------------------------------------
 seg$stats$`Total time (minutes)` <- format(seg$stats$`Total time (minutes)`, digits=3)
@@ -106,7 +104,7 @@ plot(seg$plot)
 
 ## ------------------------------------------------------------------------
 # derive reduced sample set
-reduced.samples <- moveReduce(xy=shortMove, obs.time=obs.time, img=ndvi)
+reduced.samples <- moveReduce(shortMove, ndvi, obs.time)
 obs.dates <- as.Date(reduced.samples$points$`Timeststamp (start)`)
 
 # estimate temporal changes (estimate slope)
@@ -122,5 +120,5 @@ al.samples <- reduced.samples$points[ind,]
 
 ## ---- out.width="98%", fig.height=5, fig.width=10, dpi=600, fig.align="center", fig.show='hold', echo=FALSE----
 # plot elapsed time VS temporal change
-plotMove(x=al.samples$x, y=al.samples$y, size.var=al.samples$`Elapsed time (minutes)`, fill.var=time.change$stats$value[ind], var.type="cont")
+plotMove(al.samples$x, al.samples$y, size.var=al.samples$`Elapsed time (minutes)`, fill.var=time.change$stats$value[ind], var.type="cont")
 
