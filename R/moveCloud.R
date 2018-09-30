@@ -2,8 +2,8 @@
 #'
 #' @description {Provides historical information on cloud cover for a set of coordinate
 #' pairs. The temporal information is adjusted to the sample observation date}.
-#' @param xy Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.
-#' @param obs.dates Object of class \emph{Date} with observation dates of \emph{xy}.
+#' @param x Object of class \emph{Date} with observation dates of \emph{y}.
+#' @param y Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.
 #' @param data.path Output data path for downloaded data.
 #' @param buffer.size Two element vector with temporal buffer size (expressed in days).
 #' @param remove.file Logical. Should the files be deleted after usage?
@@ -13,16 +13,14 @@
 #' @importFrom utils download.file
 #' @importFrom RCurl url.exists
 #' @return A \emph{list} object reporting on the variability of cloud cover within and around each observation dates.
-#' @details {This function uses daily cloud fraction data from NASA's NEO service.
-#' For each observation date in \emph{obs.dates}, the function downloads the correspondent image
-#' and extracts the percent of cloud cover for the corresponding samples in \emph{xy}. If
-#' \emph{data.path} is specified, the function will look within the provided directory for the
-#' cloud cover images. If they exist, they won't be downloaded reducing the amount of time required
-#' by the function. Moreover, if \emph{buffer.size} is specified, for each date, the function will only
-#' consider images that are within the specified temporal buffer. \emph{buffer.size} requires a two
-#' element vector which specifies the buffer size before and after the target dates. These additional
-#' images will be used to report on the closest time step with the lowest possible cloud cover. The
-#' final output provides a \emph{data.frame} ($report) with information on:
+#' @details {This function uses daily cloud fraction data from NASA's NEO service. For each observation date in \emph{obs.dates},
+#' the function downloads the correspondent image and extracts the percent cloud cover for the corresponding samples in \emph{y}.
+#' Before downloading any data, the function will look within \emph{data.path} for previoulsy acquired data. If they exist, they
+#' won't be downloaded reducing the processing time required by the function. Moreover, if \emph{buffer.size} is specified, for
+#' each date, the function will download all images that are within the specified temporal buffer. \emph{buffer.size} requires a
+#'  twoelement vector which specifies the buffer size before and after the target dates. These additional images will be used to
+#'  report on the closest time step with the lowest possible cloud cover. The final output provides a \emph{data.frame} ($report)
+#'  with information on:
 #' \itemize{
 #'  \item{\emph{cloud cover \% (day)}: cloud cover for the observation dates.}
 #'  \item{\emph{best date (after)}: dates before the observation dates with the lowest cloud cover.}
@@ -30,7 +28,7 @@
 #'  \item{\emph{best date (after)}: dates after the observation dates with the lowest cloud cover.}
 #'  \item{\emph{best date cloud cover \% (after)}: cloud cover best after dates.}}
 #'  Finally, the function generates a plot ($plot) reporting on the variability of cloud cover
-#'  within the dates provided by \emph{obs.dates} and the number of samples registered within them.}
+#'  and the number of observation registered in \emph{y} for each date.}
 #' @references \url{https://cneos.jpl.nasa.gov/}
 #' @seealso \code{\link{sMoveRes}} \code{\link{tMoveRes}}
 #' @examples \dontrun{
@@ -47,17 +45,17 @@
 #' }
 #' @export
 
-#-------------------------------------------------------------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------------------------------------------------#
 
-moveCloud <- function(xy, obs.dates, data.path=NULL, buffer.size=NULL, remove.file=FALSE) {
+moveCloud <- function(x, y, data.path=NULL, buffer.size=NULL, remove.file=FALSE) {
 
   #---------------------------------------------------------------------------------------------------------------------#
   #  1. check inpur variables
   #---------------------------------------------------------------------------------------------------------------------#
 
   # input keywords
-  if (!class(xy)[1]%in%c('SpatialPoints', 'SpatialPointsDataFrame')) {stop('"xy" is not of a valid class')}
-  if (is.na(crs(xy))) {stop('"xy" does not have a valid projection')}
+  if (!class(y)[1]%in%c('SpatialPoints', 'SpatialPointsDataFrame')) {stop('"y" is not of a valid class')}
+  if (is.na(crs(y))) {stop('"y" does not have a valid projection')}
   if (is.null(data.path)) {
     data.path <- tempdir()
     remove.file <- TRUE
@@ -75,11 +73,11 @@ moveCloud <- function(xy, obs.dates, data.path=NULL, buffer.size=NULL, remove.fi
   #---------------------------------------------------------------------------------------------------------------------#
 
   # target dates
-  obs.dates <- as.Date(obs.dates)
-  ud <- unique(obs.dates)
+ x <- as.Date(x)
+  ud <- unique(x)
 
   # output variables
-  d.cc <- vector('numeric', length(xy))
+  d.cc <- vector('numeric', length(y))
   p.cc.b <- d.cc
   p.dt.b <- d.cc
   class(p.dt.b) <- "Date"
@@ -92,7 +90,7 @@ moveCloud <- function(xy, obs.dates, data.path=NULL, buffer.size=NULL, remove.fi
   for (d in 1:length(ud)) {
 
     # target observations
-    loc <- which(obs.dates==ud[d])
+    loc <- which(x==ud[d])
 
     # set file name
     ifile1 <- paste0(mod, "MODAL2_D_CLD_FR_", ud[d], ".FLOAT.TIFF")
@@ -108,10 +106,10 @@ moveCloud <- function(xy, obs.dates, data.path=NULL, buffer.size=NULL, remove.fi
       if (url.exists(ifile2)) {download.file(ifile2, ofile2, quiet=TRUE, mode="wb")
         myd.r <- TRUE} else {myd.r <- FALSE}} else {myd.r <- TRUE}
 
-    # read data and crop to xy extent
-    if (mod.r & myd.r) {d.cc[loc] <- (extract(raster(ofile1), xy[loc,]) + extract(raster(ofile2), xy[loc,])) / 2}
-    if (mod.r & !myd.r) {d.cc[loc] <- extract(raster(ofile1), xy[loc,])}
-    if (!mod.r & myd.r) {d.cc[loc] <- extract(raster(ofile1), xy[loc,])}
+    # read data and crop to y extent
+    if (mod.r & myd.r) {d.cc[loc] <- (extract(raster(ofile1), y[loc,]) + extract(raster(ofile2), y[loc,])) / 2}
+    if (mod.r & !myd.r) {d.cc[loc] <- extract(raster(ofile1), y[loc,])}
+    if (!mod.r & myd.r) {d.cc[loc] <- extract(raster(ofile1), y[loc,])}
 
     # search for nearby images
     if(apply.buffer) {
@@ -130,10 +128,10 @@ moveCloud <- function(xy, obs.dates, data.path=NULL, buffer.size=NULL, remove.fi
         if (!file.exists(ofile2)) {
           if (url.exists(ifile2)) {download.file(ifile2, ofile2, quiet=TRUE, mode="wb")
             myd.r <- TRUE} else {myd.r <- FALSE}}
-        if (mod.r & myd.r) {return((extract(raster(ofile1), xy[loc,]) +
-                                     extract(raster(ofile2), xy[loc,])) / 2)}
-        if (mod.r & !myd.r) {return(extract(raster(ofile1), xy[loc,]))}
-        if (!mod.r & myd.r) {return(extract(raster(ofile2), xy[loc,]))}})
+        if (mod.r & myd.r) {return((extract(raster(ofile1), y[loc,]) +
+                                     extract(raster(ofile2), y[loc,])) / 2)}
+        if (mod.r & !myd.r) {return(extract(raster(ofile1), y[loc,]))}
+        if (!mod.r & myd.r) {return(extract(raster(ofile2), y[loc,]))}})
 
       # extract values
       f.cc <- do.call(cbind, df)
@@ -189,7 +187,7 @@ moveCloud <- function(xy, obs.dates, data.path=NULL, buffer.size=NULL, remove.fi
   }
 
   # add column names output
-  df <- data.frame(date=obs.dates, day.cover=d.cc, p.day.before=p.dt.b, p.cover.before=p.cc.b,
+  df <- data.frame(date=x, day.cover=d.cc, p.day.before=p.dt.b, p.cover.before=p.cc.b,
                    p.cover.after=p.cc.a, p.day.after=p.dt.a, stringsAsFactors=F)
 
   colnames(df) <- c("date (original)", "cloud cover % (day)", "best date (before)",
@@ -203,7 +201,7 @@ moveCloud <- function(xy, obs.dates, data.path=NULL, buffer.size=NULL, remove.fi
   # plot table
   ud <- sort(ud)
   df0 <- do.call(rbind, lapply(ud, function(d) {
-    ind <- which(obs.dates==d)
+    ind <- which(x==d)
     cc <- mean(df[ind,2], na.rm=TRUE)
     data.frame(date=d, cover=cc, count=length(ind), stringsAsFactors=FALSE)}))
 

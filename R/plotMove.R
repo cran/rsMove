@@ -3,8 +3,8 @@
 #' @description {Standardized plotting of environmental and temporal information for a set of coordinate pairs.}
 #' @param x Vector of x coordinates.
 #' @param y Vector of y coordinates.
-#' @param size.var Optional. Vector with elapsed time as report by \code{\link{moveReduce}}, \code{\link{sampleMove}} or \code{\link{timeDir}}. Controls the point size.
-#' @param fill.var Optional. Vector with environmental information. Controls the fill color.
+#' @param size.var Optional. Controls the point size.
+#' @param fill.var Optional. Controls the fill color.
 #' @param var.type One of 'cont' or 'cat'. Defines the type of \emph{fill.var}.
 #' @importFrom ggplot2 ggplot aes_string theme geom_bar scale_fill_gradientn xlab ylab theme_bw geom_point guides
 #' scale_size_continuous scale_color_discrete scale_fill_gradientn scale_size_continuous guide_legend element_text element_blank
@@ -102,7 +102,7 @@ plotMove <- function(x, y, size.var=NULL, fill.var=NULL, var.type=NULL) {
         scale_fill_gradientn(name="Value", colours=cr(10))}
     if (var.type=="cat") {
       df$value <- factor(df$value)
-      p <- ggplot(df, aes_string(x="x", y="y", color="value", size="time")) + theme_bw() + geom_point() +
+      p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", color="value", size="time")) +
         guides(col=guide_legend(override.aes=list(shape=15, size=6))) +
         theme(legend.text=element_text(size=10), panel.grid.major=element_blank(),
               panel.grid.minor=element_blank()) +

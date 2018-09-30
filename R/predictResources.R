@@ -3,37 +3,35 @@
 #' @description Spatially stratified predictive modeling of resource suitability based on presence/absence samples.
 #' @param x Object of class \emph{data.frame} with environmental variables for presence samples.
 #' @param y Object of class \emph{data.frame} with environmental variables for background samples.
-#' @param z Numeric or character vector with sample region labels. If missing, "x" is assumed as one region.
+#' @param z \emph{Numeric} or \emph{character} vector with sample region labels. If missing, \emph{x} is assumed as being one region.
 #' @param env.data Object of class \emph{RasterStack} or \emph{RasterBrick} with environmental variables in \emph{x} and \emph{y}.
 #' @importFrom stats complete.cases
 #' @importFrom caret train trainControl
 #' @importFrom raster calc nlayers
 #' @return A \emph{list}.
 #' @references \href{10.1002/rse2.70}{Remelgado, R., Leutner, B., Safi, K., Sonnenschein, R., Kuebert, C. and Wegmann, M. (2017), Linking animal movement and remote sensing - mapping resource suitability from a remote sensing perspective. Remote Sens Ecol Conserv.}
-#' @details {Modeling of resource suitability using animal movement data following a recent paper (Remelgado et al, 2017). For each
-#' unique label in \emph{z}, the function keeps it for validation and uses the remaining samples for training. Then, the
-#' function evaluates the performance of this model reporting (internally) on the number of true positives, false positives and the
-#' number of validation and predicted cases for both presences and absences. Once all sample regions are used for validation, the
-#' reported values are summed and used to derive the F1-measure. The F1-measure is estimated as \emph{2 * (P * R) / (P + R)} where
-#' \emph{P} is the Precision (ratio of true positives within the number of predicted values) and \emph{R} is the Recall (ratio of
-#' true positives within the number of validation samples). As a consequence, rather than reporting on an average performance, the
-#' final performance assessment reported by \emph{predictResources} depicts an objective picture on how the model performed among the
-#' different sets sample regions. This metric is provided for presences (\emph{x}) and absences ({\emph{y}})
-#' separately offering an overview on the stability of the model. This analysis is performed using a Random Forest model as provided
-#' within the \code{\link[caret]{train}} function of the caret package. The final predictive model is then derived with all samples.
-#' The output of \emph{predictResources} is a list object consisting of:
+#' @details {Modeling of resource suitability using animal movement data following the method of Remelgado et al (2017). Each
+#' unique label in \emph{z} is kept for validation while the remaining samples are used for training. Then, the function evaluates
+#' the performance of this model reporting (internally) on the number of true positives, false positives and the number of cases for
+#' both presences and absences. Once all sample regions are used for validation, the reported values are summed and used to derive a
+#' F1-measure. The F1-measure is estimated as \emph{2 * (P * R) / (P + R)} where \emph{P} is the Precision (ratio of true positives
+#' within the number of predicted values) and \emph{R} is the Recall (ratio of true positives within the number of validation samples).
+#' As a consequence, rather than reporting on an average performance, the final performance assessment reported by \emph{predictResources}
+#' depicts an objective picture on how the model performed among the different sets sample regions. This metric is provided for presences
+#' (\emph{x}) and absences ({\emph{y}}) separately informing on the stability of the model. This analysis is performed using a Random Forest
+#' model as provided within the \code{\link[caret]{train}} function of the caret package. The final predictive model is then derived with all
+#' samples. The output of the function is a list object consisting of:
 #' \itemize{
 #'  \item{\emph{f1} - \emph{data.frame} with final F1-measure for presences and absences.}
-#'  \item{validation - \emph{data.frame} with region identifiers and validation sample count at each iteration.}
+#'  \item{\emph{overal..validation} - \emph{data.frame} with region identifiers and validation sample count at each iteration.}
+#'  \item{\emph{sample.validation} -:Logical vector with the validation of each observation in \emph{x}.}
 #'  \item{\emph{iteration.models} - List of models estimated at each iteration.}
 #'  \item{\emph{final.model} - Final predictive model based on all samples.}
 #'  \item{\emph{probabilities} - Predicted probability image. Given if \emph{env.data} is set.}}}
 #' @seealso \code{\link{sampleMove}} \code{\link{labelSample}} \code{\link{backSample}} \code{\link[caret]{train}}
 #' @examples \dontrun{
 #'
-#'  require(rgdal)
 #'  require(raster)
-#'  require(sp)
 #'
 #'  # read remote sensing data
 #'  file <- list.files(system.file('extdata', '', package="rsMove"), 'ndvi.tif', full.names=TRUE)
@@ -47,7 +45,7 @@
 #'  format="%Y/%m/%d %H:%M:%S")
 #'
 #'  # remove redundant samples
-#'  shortMove <- moveReduce(shortMove, obs.time, r.stk)$points
+#'  shortMove <- moveReduce(shortMove, r.stk, obs.time)$points
 #'
 #'  # retrieve remote sensing data for samples
 #'  rsQuery <- extract(r.stk, shortMove)
@@ -109,6 +107,7 @@ predictResources <-function(x, y, z, env.data=NULL) {
 
   # initiate outputs
   val.set <- data.frame(region=vector(class(z), length(uv)), count=vector('numeric', length(uv)))
+  uid.val <- i1
   m.ls <- vector('list', length(uv)) # model list
 
   pp <- 0
@@ -147,6 +146,8 @@ predictResources <-function(x, y, z, env.data=NULL) {
     val.set$region[v] = uv[v] # unique identifyer
     val.set$count[v] = length(i1.v) # sample count
 
+    uid.val[i1.v] <- pred[1:length(i1.v)] == 1 # validate individual samples
+
     # remove temporary variables
     rm(i1.t, i1.v, i0.t, i0.v, vi, si)
 
@@ -167,6 +168,6 @@ predictResources <-function(x, y, z, env.data=NULL) {
   # write output
   model <- train(rbind(x, y), as.factor(c(i1,i0)), method="rf", trControl=tc)
   if (!is.null(env.data)) {prob <-  calc(env.data, function(x){stats::predict(model, x, type='prob')$'1'})} else {prob <- NULL}
-  return(list(f1=acc, validation=val.set, iteration.models=m.ls, final.model=model, probabilities=prob))
+  return(list(f1=acc, overall.validation=val.set, sample.validation=uid.val, iteration.models=m.ls, final.model=model, probabilities=prob))
 
 }
