@@ -6,13 +6,14 @@
 #' @param size.var Optional. Controls the point size.
 #' @param fill.var Optional. Controls the fill color.
 #' @param var.type One of 'cont' or 'cat'. Defines the type of \emph{fill.var}.
+#' @param var.names Character vector with names for \emph{size.var} and \emph{fill.var} to ve added to the plot.
 #' @importFrom ggplot2 ggplot aes_string theme geom_bar scale_fill_gradientn xlab ylab theme_bw geom_point guides
 #' scale_size_continuous scale_color_discrete scale_fill_gradientn scale_size_continuous guide_legend element_text element_blank
 #' @importFrom grDevices colorRampPalette
 #' @seealso \code{\link{dataQuery}} \code{\link{moveReduce}}
 #' @return A \emph{ggplot} object.
 #' @details {This function was designed to extent on other functions such as \code{\link{dataQuery}}, which provides environmental
-#' information, and \code{\link{moveReduce}}, which provides information on the time spent per sample. Using these two functions
+#' information, and \code{\link{moveReduce}}, which provides information on e.g. the time spent per sample. Using these two functions
 #' as an example, \emph{plotMove} can represent the relation between the elapsed time and the change in environmental conditions.}
 #' @examples {
 #'
@@ -36,7 +37,7 @@
 #'  # plot output
 #'  x <- move.reduce$points@data$x
 #'  y <- move.reduce$points@data$y
-#'  et <- move.reduce$points@data$`Elapsed time (minutes)`
+#'  et <- move.reduce$points@data$elapsed.time
 #'  op <- plotMove(x, y, size.var=et, fill.var=ov, var.type="cont")
 #'
 #' }
@@ -44,20 +45,35 @@
 
 #----------------------------------------------------------------------------------------------------------#
 
-plotMove <- function(x, y, size.var=NULL, fill.var=NULL, var.type=NULL) {
+plotMove <- function(x, y, size.var=NULL, fill.var=NULL, var.type=NULL, var.names=NULL) {
 
-#----------------------------------------------------------------------------------------------------------#
-# 1. Check input data
-#----------------------------------------------------------------------------------------------------------#
+  #----------------------------------------------------------------------------------------------------------#
+  # 1. Check input data
+  #----------------------------------------------------------------------------------------------------------#
 
+  # check coordinates
+  if (!is.numeric(x) | !is.numeric(y)) {stop('"x" and/or "y" not numeric')}
   if (length(x)!=length(y)) {stop('"x" and "y" have different lengths')}
+
+  # check size variable
   if(!is.null(size.var)) {
     if (!is.numeric(size.var)) {stop('"size.var" is nof of a valid class')}
     if (length(size.var)!=length(x)) {stop('coordinates and "size.var" have different lengths')}}
+
+  # check fill variable
   if (!is.null(fill.var)) {
     if (is.null(var.type)) {stop('"fill.var" is set. Please specify "var.type"')}
     if (!var.type%in%c('cont', 'cat')) {stop('"var.type" is not a recognized keyword')}
     if (length(fill.var)!=length(x)) {stop('coordinates and "fill.var" have different lengths')}}
+
+  # check variable names
+  if (is.null(var.names)) {
+    if (var.type == 'cont') {var.names <- c('size', 'value')}
+    if (var.type == 'cat') {var.names <- c('size', 'class')}
+  } else {
+    if (!is.character(var.names)) {stop('"var.names" is not a character object')}
+    if (length(var.names) != 2) {stop('"var.names" should have two elements')}
+  }
 
   # abort function if no variable is provided
   if (is.null(size.var) & is.null(fill.var)) {
@@ -65,96 +81,90 @@ plotMove <- function(x, y, size.var=NULL, fill.var=NULL, var.type=NULL) {
     return()
   }
 
-#----------------------------------------------------------------------------------------------------------#
-# 2. Determine variable limits/breaks
-#----------------------------------------------------------------------------------------------------------#
+  #----------------------------------------------------------------------------------------------------------#
+  # 2. Determine variable limits/breaks
+  #----------------------------------------------------------------------------------------------------------#
 
-  # time breaks
-  if (!is.null(size.var)) {
-    mv <- round(max(size.var, na.rm=T))
-    nc <- nchar(as.character(mv))
-    m <- as.numeric(paste0(1, paste0(replicate((nc-1), '0'), collapse='')))
-    mv <- mv / m
-    tb <- round(mv)
-    if (mv > tb) {tb <- (tb+0.2)*m} else {tb <- tb*m}
-    tb <- seq(0, tb, m)}
+  # size breaks
+  if (!is.null(size.var)) {tb <- seq(min(size.var), max(size.var), sd(size.var))}
 
-  # color scheme for value
+  # color scheme for fill
   if (!is.null(fill.var)) {cr <- colorRampPalette(c("dodgerblue3", "khaki2", "forestgreen"))}
 
-#----------------------------------------------------------------------------------------------------------#
-# 3. Build plots
-#----------------------------------------------------------------------------------------------------------#
+  #----------------------------------------------------------------------------------------------------------#
+  # 3. Build plots
+  #----------------------------------------------------------------------------------------------------------#
 
-  # time and environmental data
+  # size and environmental data
   if (!is.null(size.var) & !is.null(fill.var)) {
 
     # build data frame
-    df <- data.frame(x=x, y=y, time=size.var, value=fill.var)
+    df <- data.frame(x=x, y=y, size=size.var, fill=fill.var)
 
     # build plot
     if (var.type=="cont") {
-      p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", size="time", fill="value"), color="black", pch=21) +
-        guides(col=guide_legend(override.aes = list(shape=15, size=6))) +
+      p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", size="size", fill="fill"), color="black", pch=21) +
+        guides(size=guide_legend(order=1, override.aes=list(shape=1)), col=guide_legend(order=0, override.aes=list(shape=15, size=6))) +
         theme(legend.text=element_text(size=10), panel.grid.major=element_blank(),
               panel.grid.minor=element_blank()) +
-        scale_size_continuous(name="Elapsed Time", breaks=tb, range=c(2,12)) +
-        scale_fill_gradientn(name="Value", colours=cr(10))}
+        scale_size_continuous(name=var.names[1], breaks=tb, range=c(2,12), labels=sprintf("%0.2f", tb)) +
+        scale_fill_gradientn(name=var.names[2], colours=cr(10))}
     if (var.type=="cat") {
-      df$value <- factor(df$value)
-      p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", color="value", size="time")) +
-        guides(col=guide_legend(override.aes=list(shape=15, size=6))) +
+      df$fill <- factor(df$fill)
+      p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", size="size", color="fill")) +
+        guides(size=guide_legend(order=1, override.aes=list(shape=1)), col=guide_legend(order=0, override.aes=list(shape=15, size=6))) +
         theme(legend.text=element_text(size=10), panel.grid.major=element_blank(),
               panel.grid.minor=element_blank()) +
-        scale_size_continuous(name="Elapsed Time", breaks=tb, range=c(2,12)) +
-        scale_color_discrete(name="Class")}
+        scale_size_continuous(name=var.names[1], breaks=tb, range=c(2,12), labels=sprintf("%0.2f", tb)) +
+        scale_color_discrete(name=var.names[2])}
 
   }
 
-#----------------------------------------------------------------------------------------------------------#
+  #----------------------------------------------------------------------------------------------------------#
 
-  # only time
+  # only size
   if (!is.null(size.var) & is.null(fill.var)) {
 
     # build data frame
-    df <- data.frame(x=x, y=y, time=size.var)
+    df <- data.frame(x=x, y=y, size=size.var)
 
     # build plot
-    p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", size="time"), color="black", pch=21) +
+    p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", size="size"), color="black", pch=21) +
       guides(fill=FALSE, col=guide_legend(override.aes = list(shape=15, size=6))) +
       theme(legend.text=element_text(size=10), panel.grid.major=element_blank(),
             panel.grid.minor=element_blank()) +
-      scale_size_continuous(name="Elapsed Time", breaks=tb, range=c(2,12))
+      scale_size_continuous(name=var.names[1], breaks=tb, range=c(2,12), labels=sprintf("%0.2f", tb))
   }
 
-#----------------------------------------------------------------------------------------------------------#
+  #----------------------------------------------------------------------------------------------------------#
 
   # only environmental data
   if (is.null(size.var) & !is.null(fill.var)) {
 
     # build data frame
-    df <- data.frame(x=x, y=y, value=fill.var)
+    df <- data.frame(x=x, y=y, fill=fill.var)
 
     # build plot
     if (var.type=="cont") {
-      p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", color="value"), color="black", pch=21) +
+      p <- ggplot(df) + theme_bw() + geom_point(aes_string(x="x", y="y", color="fill"), color="black", pch=21) +
         guides(col=guide_legend(override.aes = list(shape=15, size=6))) +
         theme(legend.text=element_text(size=10), panel.grid.major=element_blank(),
               panel.grid.minor=element_blank()) +
-        scale_size_continuous(name="Elapsed Time", breaks=tb, range=c(2,12)) +
-        scale_fill_gradientn(name="Value", colours=cr(10))}
+        scale_size_continuous(name=var.names[1], breaks=tb, range=c(2,12)) +
+        scale_fill_gradientn(name=var.names[2], colours=cr(10))}
     if (var.type=="cat") {
-      df$value <- factor(df$value)
-      p <- ggplot(df, aes_string(x="x", y="y", color="value")) + theme_bw() + geom_point() +
+      df$fill <- factor(df$fill)
+      p <- ggplot(df, aes_string(x="x", y="y", color="fill")) + theme_bw() + geom_point() +
         guides(col=guide_legend(override.aes = list(shape=15, size=6))) +
         theme(legend.text=element_text(size=10), panel.grid.major=element_blank(),
               panel.grid.minor=element_blank()) +
-        scale_size_continuous(name="Elapsed Time", breaks=tb) +
-        scale_color_discrete(name="Class")}
+        scale_size_continuous(name=var.names[1], breaks=tb, labels=sprintf("%0.2f", tb)) +
+        scale_color_discrete(name=var.names[2])}
 
 
   }
 
-    return(p)
+  return(p)
 
 }
+

@@ -2,6 +2,7 @@
 # rsMove
 [![CRAN version](https://www.r-pkg.org/badges/version/rsMove)](https://CRAN.R-project.org/package=rsMove)
 [![CRAN downloads](https://cranlogs.r-pkg.org/badges/last-month/rsMove?color=brightgreen)](https://CRAN.R-project.org/package=rsMove)
+[![CRAN downloads](http://cranlogs.r-pkg.org/badges/grand-total/rsMove?color=brightgreen)](https://CRAN.R-project.org/package=rsMove)
 
 ### Why develop rsMove?
 
@@ -13,14 +14,16 @@ In the scope of movement ecology, Global Positioning Systems (GPS) have evolved 
 
 ### Installation
 This gitHub is used as a basis for the improvement of *rsMove*. A stable release is available on <a href="https://cran.r-project.org/package=rsMove">CRAN</a> and can installed with:
+
 ```R
 install.packages('rsMove')
 ```
+
 <br>
 
 ### Examples
 <p align="justify">
- Please click <a href="https://cran.r-project.org/package=rsMove/vignettes/rsMove.html">here</a> for the package vignette.
+A paper on the package is currently under review (cross your fingers) and thus the vignette on the general applicability of rsMove was removed to avoid conflicts. Hopefully, I'll announce the paper here soon. For the time being, you can click <a href="https://cran.r-project.org/package=rsMove/vignettes/rsMove.html">here</a> for a vignette on the use of rsMove to predict environmental resource suitability following the methodology described in <a href="http://onlinelibrary.wiley.com/doi/10.1002/rse2.70/full">this</a> paper.
 </p>
 
 <br>
@@ -38,6 +41,8 @@ The Department of Remote Sensing of the University of Würzburg has developed ot
 
 * <a href="https://bleutner.github.io/RStoolbox/">RStoolbox</a>
 * <a href="https://github.com/cran/moveVis/">moveVis</a>
+* <a href="https://github.com/RRemelgado/rsMove">fieldRS</a>
+* <a href="https://github.com/RRemelgado/CAWaR">CAWaR</a>
 
 <p align="justify">
 Click <a href="http://remote-sensing.eu/">here</a> for news on our department.
