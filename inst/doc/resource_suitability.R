@@ -2,11 +2,17 @@
 # load packages
 require(rsMove)
 require(raster)
+require(rgdal)
 require(ggplot2)
 require(knitr)
 require(kableExtra)
 require(caret)
 require(lattice)
+require(igraph)
+require(randomForest)
+require(e1071)
+require(randomForest)
+
 
 ## ----message=FALSE-------------------------------------------------------
 data("shortMove") # movement data
