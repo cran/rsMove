@@ -1,7 +1,7 @@
 #' @title moveCloud
 #'
 #' @description {Provides historical information on cloud cover for a set of coordinate
-#' pairs. The temporal information is adjusted to the sample observation date}.
+#' pairs. The temporal information is adjusted to the sample observation date.}
 #' @param x Object of class \emph{Date} with observation dates of \emph{y}.
 #' @param y Object of class \emph{SpatialPoints} or \emph{SpatialPointsDataFrame}.
 #' @param data.path Output data path for downloaded data.
@@ -55,6 +55,8 @@ moveCloud <- function(x, y, data.path=NULL, buffer.size=NULL, remove.file=FALSE)
 
   # input keywords
   if (!class(y)[1]%in%c('SpatialPoints', 'SpatialPointsDataFrame')) {stop('"y" is not of a valid class')}
+  if (class(x)[1] != 'Date') {stop('"x" is not of a valid class')}
+  if (sum(is.na(x)) > 0) {stop('please filter missing values in "x"')}
   if (is.na(crs(y))) {stop('"y" does not have a valid projection')}
   if (is.null(data.path)) {
     data.path <- tempdir()

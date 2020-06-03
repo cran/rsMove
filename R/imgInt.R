@@ -1,7 +1,6 @@
 #' @title imgInt
 #'
-#' @description {Temporal linear interpolation of environmental data using
-#' a \emph{raster}, \emph{SpatialPointsDataFrames} or \emph{matrix}/\emph{data.frame}.}
+#' @description {Temporal linear interpolation of environmental data using a \emph{raster}, \emph{SpatialPointsDataFrames} or \emph{matrix}/\emph{data.frame}.}
 #' @param x Object of class \emph{RasterStack}, \emph{RasterBrick} or \emph{data.frame}.
 #' @param y Object of class \emph{Date} with target dates. Alternatively, a \emph{RasterStack} or \emph{RasterBrick} with julian days for each pixel.
 #' @param x.dates Object of class \emph{Date} with dates of \emph{x}.
@@ -60,6 +59,7 @@ imgInt <- function(x, x.dates, y, time.buffer, smooth=TRUE, smooth.fun=function(
   if (!class(x)[1]%in%c('RasterStack', 'RasterBrick')) {stop('"x" is not of a valid class')}
   if (is.Date(x.dates)) {
     if (nlayers(x)!=length(x.dates)) {stop('"x" and "x.dates" have different lengths')}
+    if (sum(is.na(x.dates)) > 0) {stop('please filter missing values in "x.dates"')}
     int.method <- 1}
   if (class(x.dates) %in% c('RasterStack', 'RasterBrick')) {
     if (nlayers(x)!=nlayers(x.dates)) {stop('"x" and "x.dates" have different lengths')}

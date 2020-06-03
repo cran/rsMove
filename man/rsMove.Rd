@@ -3,8 +3,7 @@
 \docType{package}
 \name{rsMove}
 \alias{rsMove}
-\alias{rsMove-package}
 \title{rsMove.}
 \description{
-rsMove.
+Example datasets of the rsMove package
 }

@@ -23,12 +23,12 @@
 #'
 #'  require(raster)
 #'
-#'  # reference data
-#'  data(longMove)
+#'  data(longMove) # access reference data
+#'  longMove <- longMove[c(1:50, 2000:2050,3000:3050),] # subset for testing
 #'
 #'  # test function for intervals of 1, 8 and 16 days (e.g. of MODIS data)
 #'  obs.date <- as.Date(longMove@data$timestamp)
-#'  a.res <- tMoveRes(longMove, obs.date, c(1,8,16), 0.01)
+#'  a.res <- tMoveRes(longMove, obs.date, c(1,8,16), 0.1)
 #'
 #' }
 #' @export
@@ -45,6 +45,7 @@ tMoveRes <- function(xy, obs.date, time.res, pixel.res) {
   if (length(pixel.res)>1) {stop('"pixel.res" has more than one element')}
   if (!is.numeric(time.res)) {stop('"time.res" is not numeric')}
   if (class(obs.date)!="Date") {stop('"obs.date" is not of class "Date"')}
+  if(sum(is.na(obs.date)) > 0) {stop('please filter missing values in "obs.date"')}
   rp <- crs(xy) # reference projection
 
   #---------------------------------------------------------------------------------------------------------------------#
@@ -61,14 +62,16 @@ tMoveRes <- function(xy, obs.date, time.res, pixel.res) {
     tmp <- do.call(rbind, lapply(1:nw, function(w) {
 
       loc <- which(obs.date >= (st+r*(w-1)) & obs.date <= (((st+r)+(r*w))-1)) # reference samples
-      ext <- extend(raster(extent(xy[loc,]), res=pixel.res, crs=rp), c(2,2), vals=NA)
-      sp <- cellFromXY(ext, xy[loc,]) # pixel positions of xy
-      up <- unique(sp) # unique pixels
-      ext[up] <- 1
-      regions <- clump(ext) # connected component analysis
-
-      # return stats
-      return(data.frame(nr.pixels=length(up), nr.regions=cellStats(regions, max, na.rm=TRUE)))
+      if (length(loc) > 0) {
+        ext <- raster(extend(extent(xy[loc, ]), c(pixel.res, pixel.res)), res = pixel.res, crs = rp)
+        sp <- cellFromXY(ext, xy[loc, ])
+        up <- unique(sp)
+        ext[up] <- 1
+        regions <- clump(ext)
+        return(data.frame(nr.pixels = length(up), nr.regions = cellStats(regions, max, na.rm = TRUE)))
+      } else {
+        return(data.frame(nr.pixels=0, nr.regions =0))
+      }
 
     }))
 

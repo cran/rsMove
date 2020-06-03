@@ -13,7 +13,7 @@ In the scope of movement ecology, Global Positioning Systems (GPS) have evolved 
 <br>
 
 ### Installation
-This gitHub is used as a basis for the improvement of *rsMove*. A stable release is available on <a href="https://cran.r-project.org/package=rsMove">CRAN</a> and can installed with:
+This gitHub is used as a basis for the improvement of *rsMove*. A stable release is <a href="https://cran.r-project.org/package=rsMove">available on CRAN</a> and can installed with:
 
 ```R
 install.packages('rsMove')
@@ -23,14 +23,14 @@ install.packages('rsMove')
 
 ### Examples
 <p align="justify">
-A paper on the package is currently under review (cross your fingers) and thus the vignette on the general applicability of rsMove was removed to avoid conflicts. Hopefully, I'll announce the paper here soon. For the time being, you can click <a href="https://cran.r-project.org/package=rsMove/vignettes/resource_suitability.html">here</a> for a vignette on the use of rsMove to predict environmental resource suitability following the methodology described in <a href="http://onlinelibrary.wiley.com/doi/10.1002/rse2.70/full">this</a> paper.
+<a href='https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.13199'>A paper on the package</a> is currently available describing the general applicability of rsMove. Addtitionally, we <a href="https://cran.r-project.org/package=rsMove/vignettes/resource_suitability.html">developed a vignette </a> on the use of rsMove to predict environmental resource suitability following the methodology described <a href="http://onlinelibrary.wiley.com/doi/10.1002/rse2.70/full">in this paper</a>.
 </p>
 
 <br>
 
 ### Bug reports & contact
 
-For bug reports, please use <a href="https://github.com/RRemelgado/rsMove/issues/"</a>. Feature requests and other contributions are also welcome.
+For bug reports, please use <a href="https://github.com/RRemelgado/rsMove/issues/">our issue page</a>. Feature requests and other contributions are also welcome.
 
 <br>
 
